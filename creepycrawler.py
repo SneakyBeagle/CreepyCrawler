@@ -16,8 +16,9 @@ class Crawler():
     emails: list
 
     # Links that often do not end up inside html tags, but can still be interesting
-    known_links_patt = [
-        '.*(?P<link>g.co/[^\"]*$'
+    links_patt = [
+        '^(.*(href|link|action|value|src|srcset)\=\"(?P<link>[^\"]+)\".*)+$', # links in tags
+        '.*(?P<link>g.co/[^\"]*$' # google specific link often embedded in text, not in tags
     ]
 
     def __init__(self, baseurl, depth=10):
@@ -116,13 +117,19 @@ class Crawler():
                     else:
                         if match['link'].startswith('//'):
                             links.append(baseurl.split('//')[0]+match['link'])
-                        elif match['link'].startswith('/'):
+                        elif match['link'].startswith('/'):# or match['link'].startswith('#'):
                             links.append(baseurl+match['link'])
                         else:
                             links.append(baseurl+'/'+match['link'])
                     
 
-        print('\n'.join(self.__rm_dupl(links)))
+        self.external_urls[baseurl] = []
+        links = self.__rm_dupl(links)
+        if link.startswith(baseurl) and not(link in self.visited_urls or link in self.crawling_urls):
+            self.next_urls.append(link)
+        else:
+            self.external_urls[baseurl].append(link)
+            
         sys.exit(0)
         return links
         
