@@ -104,31 +104,22 @@ class Crawler():
 
     def __retrieve_links_re(self, html, baseurl):
         search_patt='^(.*(href|link|action|value|src|srcset)\=\"(?P<link>[^\"]+)\".*)+$'
-        link_patt=''
         html = html.split(' ')
 
         links=[]
         for line in html:
             if '/' in line or '.' in line:
-                print('-'*20)
-                print(line)
                 match = re.search(search_patt, line)
                 if match:
                     if match['link'].startswith('http://') or match['link'].startswith('https://'):
-                        print('MATCH:',match['link'])
                         links.append(match['link'])
                     else:
                         if match['link'].startswith('//'):
-                            print('MATCH:',baseurl.split('//')[0]+match['link'])
                             links.append(baseurl.split('//')[0]+match['link'])
                         elif match['link'].startswith('/'):
-                            print('MATCH:',baseurl+match['link'])
                             links.append(baseurl+match['link'])
                         else:
-                            print('MATCH:',baseurl+'/'+match['link'])
                             links.append(baseurl+'/'+match['link'])
-                else:
-                    print('No match')
                     
 
         print('\n'.join(self.__rm_dupl(links)))
