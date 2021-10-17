@@ -4,7 +4,7 @@ import sys
 import argparse
 import requests
 import re
-from bs4 import BeautifulSoup
+#from bs4 import BeautifulSoup
 from urllib3.exceptions import InsecureRequestWarning
 
 class Crawler():
@@ -40,7 +40,7 @@ class Crawler():
             sys.exit(1)
         print('Retrieving links')
         self.__retrieve_links_re(html=resp, baseurl=url)
-        self.__retrieve_links(html=resp, baseurl=url)
+        #self.__retrieve_links(html=resp, baseurl=url)
         print('Retrieving emails')
         self.__retrieve_emailaddr(html=resp, baseurl=url)
 
@@ -104,7 +104,7 @@ class Crawler():
         self.emails[baseurl] = self.__rm_dupl(self.emails[baseurl])
 
     def __retrieve_links_re(self, html, baseurl):
-        search_patt='^(.*(href|link|action|value|src|srcset)\=\"(?P<link>[^\"]+)\".*)+$'
+        search_patt='^(.*(http[s]{,1}\:\/\/|href|link|action|value|src|srcset)\=\"(?P<link>[^\"]+)\".*)+$'
         html = html.split(' ')
 
         links=[]
@@ -125,11 +125,14 @@ class Crawler():
 
         self.external_urls[baseurl] = []
         links = self.__rm_dupl(links)
-        if link.startswith(baseurl) and not(link in self.visited_urls or link in self.crawling_urls):
-            self.next_urls.append(link)
-        else:
-            self.external_urls[baseurl].append(link)
-            
+        for link in links:
+            if link.startswith(baseurl) and not(link in self.visited_urls or link in self.crawling_urls):
+                self.next_urls.append(link)
+            else:
+                self.external_urls[baseurl].append(link)
+
+        print('\n'.join(self.next_urls))
+        print('\n'.join(self.external_urls[baseurl]))
         sys.exit(0)
         return links
         
