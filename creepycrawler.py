@@ -12,14 +12,22 @@ class Crawler():
     visited_urls: dict
     crawling_urls: list
     next_urls: list
-    mail_patt = '[A-z][0-9A-z\-\_\.]+\@[0-9A-z\-\_\.]+[a-z]'
+    #mail_patt = '[A-z][0-9A-z\-\_\.]+\@[0-9A-z\-\_\.]+[a-z]'
     emails: list
+    host: str
+    protocol: str
 
     # Links that often do not end up inside html tags, but can still be interesting
     links_patt = [
+        '^.*(?P<link>http[s]{0,1}\:\/\/[^\"]+\.[^\"]+).*$', #general links
         '^(.*(href|link|action|value|src|srcset)\=\"(?P<link>[^\"]+)\".*)+$', # links in tags
-        '.*(?P<link>g.co/[^\"]*$' # google specific link often embedded in text, not in tags
+        '.*(?P<link>g.co/[^\"]*)$' # google specific link often embedded in text, not in tags
     ]
+
+    mail_patt = [
+        '[A-z][0-9A-z\-\_\.]+\@[0-9A-z\-\_\.]+[a-z]'
+    ]
+    
 
     def __init__(self, baseurl, depth=10):
         self.external_urls = {}
@@ -30,7 +38,23 @@ class Crawler():
         self.emails = {}
         self.depth=depth
 
+        if baseurl.startswith('http://'):
+            self.protocol = 'http://'
+            self.host = (baseurl.split('http://')[1]).split('/')[0]
+        elif baseurl.startswith('https://'):
+            self.protocol = 'https://'
+            self.host = (baseurl.split('https://')[1]).split('/')[0]
+        else:
+            self.protocol = ''
+            self.host = baseurl.split('/')[0]
+
+        print('PROTOCOL:', self.protocol)
+        print('HOST:', self.host)
+
     def run(self, url, verify=True):
+        """
+        Run creepycrawler on specified url.
+        """
         # Initial request
         print('Getting baseurl', url)
         resp = self.get(url=url, verify=verify)
@@ -40,7 +64,6 @@ class Crawler():
             sys.exit(1)
         print('Retrieving links')
         self.__retrieve_links_re(html=resp, baseurl=url)
-        #self.__retrieve_links(html=resp, baseurl=url)
         print('Retrieving emails')
         self.__retrieve_emailaddr(html=resp, baseurl=url)
 
@@ -57,7 +80,7 @@ class Crawler():
                     resp = self.get(url=link, verify=verify)
                     if resp:
                         print('Visited', len(self.visited_urls), 'links', end='\r')
-                        self.__retrieve_links(html=resp, baseurl=link)
+                        self.__retrieve_links_re(html=resp, baseurl=link)
                         self.__retrieve_emailaddr(html=resp, baseurl=link)
         except KeyboardInterrupt:
             print('\nStopping')
@@ -99,28 +122,41 @@ class Crawler():
         return self.emails
 
     def __retrieve_emailaddr(self, html, baseurl):
-        self.emails[baseurl] = re.findall(self.mail_patt, html)
+        """
+        Retrieve email addresses from HTML based on regular expressions
+        """
+        for mail_patt in self.mail_patt:
+            self.emails[baseurl] = re.findall(mail_patt, html)
 
         self.emails[baseurl] = self.__rm_dupl(self.emails[baseurl])
 
     def __retrieve_links_re(self, html, baseurl):
-        search_patt='^(.*(http[s]{,1}\:\/\/|href|link|action|value|src|srcset)\=\"(?P<link>[^\"]+)\".*)+$'
+        """
+        Retrieve links from HTML based on regular expressions.
+        """
+        #search_patt='^(.*(http[s]{,1}\:\/\/|href|link|action|value|src|srcset)\=\"(?P<link>[^\"]+)\".*)+$'
         html = html.split(' ')
+        tmp_html = []
+        for i in range(len(html)):
+            tmp_html += html[i].split(';')
+
+        html = [part for part in tmp_html if part]
 
         links=[]
         for line in html:
             if '/' in line or '.' in line:
-                match = re.search(search_patt, line)
-                if match:
-                    if match['link'].startswith('http://') or match['link'].startswith('https://'):
-                        links.append(match['link'])
-                    else:
-                        if match['link'].startswith('//'):
-                            links.append(baseurl.split('//')[0]+match['link'])
-                        elif match['link'].startswith('/'):# or match['link'].startswith('#'):
-                            links.append(baseurl+match['link'])
+                for patt in self.links_patt:
+                    match = re.search(patt, line)
+                    if match:
+                        if match['link'].startswith('http://') or match['link'].startswith('https://'):
+                            links.append(match['link'])
                         else:
-                            links.append(baseurl+'/'+match['link'])
+                            if match['link'].startswith('//'):
+                                links.append(baseurl.split('//')[0]+match['link'])
+                            elif match['link'].startswith('/'):# or match['link'].startswith('#'):
+                                links.append(baseurl+match['link'])
+                            else:
+                                links.append(baseurl+'/'+match['link'])
                     
 
         self.external_urls[baseurl] = []
@@ -131,9 +167,8 @@ class Crawler():
             else:
                 self.external_urls[baseurl].append(link)
 
-        print('\n'.join(self.next_urls))
-        print('\n'.join(self.external_urls[baseurl]))
-        sys.exit(0)
+        #print('\n'.join(self.next_urls))
+        #print('\n'.join(self.external_urls[baseurl]))
         return links
         
     def __retrieve_links(self, html, baseurl):
@@ -170,7 +205,7 @@ class Crawler():
     def __rm_dupl(self, l):
         return list(dict.fromkeys(l))
 
-# TODO support for custom headers, cookies, read request from file, other request methods
+# TODO support for custom headers, cookies, read request from file, other request methods, form actions
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-u', '--url', help='The base URL to start crawling from', required=True)
