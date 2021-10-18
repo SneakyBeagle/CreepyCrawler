@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import sys
+import os
 import argparse
 import requests
 import re
@@ -9,6 +10,7 @@ from urllib3.exceptions import InsecureRequestWarning
 
 class Crawler():
     external_urls: list
+    __urls: dict
     visited_urls: dict
     crawling_urls: list
     next_urls: list
@@ -19,9 +21,9 @@ class Crawler():
 
     # Links that often do not end up inside html tags, but can still be interesting
     links_patt = [
-        '^.*(?P<link>http[s]{0,1}\:\/\/[^\"]+\.[^\"]+).*$', #general links
-        '^(.*(href|link|action|value|src|srcset)\=\"(?P<link>[^\"]+)\".*)+$', # links in tags
-        '.*(?P<link>g.co/[^\"]*)$' # google specific link often embedded in text, not in tags
+        '^.*(?P<link>http[s]{0,1}\:\/\/[^\"]+\.[^\"^\<^\>]+).*$', #general links
+        '^(.*(href|link|action|value|src|srcset)\=\"(?P<link>[^\"^\<^\>]+)\".*)+$', # links in tags
+        '.*(?P<link>g.co/[^\^\<^\>"]*)$' # google specific link often embedded in text, not in tags
     ]
 
     mail_patt = [
@@ -31,12 +33,15 @@ class Crawler():
 
     def __init__(self, baseurl, depth=10):
         self.external_urls = {}
+        self.__urls = {}
         self.visited_urls = {}
         self.visited_status = []
         self.crawling_urls = []
         self.next_urls = []
         self.emails = {}
         self.depth=depth
+        self.term_width = os.get_terminal_size().columns
+        print(self.term_width)
 
         if baseurl.startswith('http://'):
             self.protocol = 'http://'
@@ -77,9 +82,10 @@ class Crawler():
                 self.crawling_urls = self.next_urls[:]
                 self.next_urls=[]
                 for link in self.crawling_urls:
+                    string = 'Visiting: '+link
+                    print(string+((self.term_width-len(string))*' '), end='\r')
                     resp = self.get(url=link, verify=verify)
                     if resp:
-                        print('Visited', len(self.visited_urls), 'links', end='\r')
                         self.__retrieve_links_re(html=resp, baseurl=link)
                         self.__retrieve_emailaddr(html=resp, baseurl=link)
         except KeyboardInterrupt:
@@ -101,7 +107,10 @@ class Crawler():
                                           'headers': res.headers,
                                           'status': res.status_code,
                                           'length': len(res.text)}
-                self.visited_status.append(res.status_code)
+                if url in self.__urls:
+                    self.__urls[url]['status'] = res.status_code
+                    self.__urls[url]['length'] = len(res.text)
+                #self.visited_status.append(res.status_code)
 
                 return res.text
         except Exception as e:
@@ -111,9 +120,10 @@ class Crawler():
 
     def get_links(self):
         return self.next_urls
-    
+
     def get_urls(self):
-        return self.visited_urls
+        #return self.visited_urls
+        return self.__urls
 
     def get_ext_urls(self):
         return self.external_urls
@@ -147,7 +157,10 @@ class Crawler():
             if '/' in line or '.' in line:
                 for patt in self.links_patt:
                     match = re.search(patt, line)
+                    
                     if match:
+                        evidence = match.string #TODO: Add optional evidence to each link
+                        span = match.span() #TODO: Add optional span to each link
                         if match['link'].startswith('http://') or match['link'].startswith('https://'):
                             links.append(match['link'])
                         else:
@@ -157,6 +170,15 @@ class Crawler():
                                 links.append(baseurl+match['link'])
                             else:
                                 links.append(baseurl+'/'+match['link'])
+                        if links and not(links[-1] in self.__urls):
+                            self.__urls[links[-1]] = {'evidence':evidence, 'span':span,
+                                                      'status':'Not visited',
+                                                      'length':'Not visited',
+                                                      'regex':patt}
+                        elif links:
+                            self.__urls[links[-1]]['evidence']=evidence
+                            self.__urls[links[-1]]['span']=span
+                            self.__urls[links[-1]]['regex']=patt
                     
 
         self.external_urls[baseurl] = []
@@ -207,6 +229,13 @@ class Crawler():
 
 # TODO support for custom headers, cookies, read request from file, other request methods, form actions
 def main():
+    BOLD_WHITE = '\033[1m\033[37m'
+    FAINT_WHITE = '\033[2m\033[37m'
+    RED = '\033[31m'
+    GREEN = '\033[32m'
+    GREY = '\033[37m'
+    RESET = '\033[0m'
+
     parser = argparse.ArgumentParser()
     parser.add_argument('-u', '--url', help='The base URL to start crawling from', required=True)
     parser.add_argument('-d', '--crawl-depth', help='The crawl depth to use, default is 10')
@@ -216,8 +245,18 @@ def main():
                             action='store_true')
     parser.add_argument('-v', '--verbose', help='Verbose output',
                             action='store_true')
+    parser.add_argument('--evidence', help='Print evidence',
+                            action='store_true')
+    parser.add_argument('--no-colours', help='No colours',
+                            action='store_true')
     args = parser.parse_args()
 
+    if args.no_colours:
+        BOLD=''
+        RED=''
+        GREY=''
+        RESET=''
+    
     if args.insecure:
         requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
     
@@ -226,7 +265,16 @@ def main():
     
     print('\nINTERNAL LINKS:\n=====================================')
     urls = crawler.get_urls()
-    print('\n'.join([url for url in urls]))
+    for url,it in urls.items():
+        if it['status'] == 200:
+            print(BOLD_WHITE+url+RESET, GREEN+'-->', '['+str(it['status'])+']'+RESET)
+        else:
+            print(FAINT_WHITE+url+RESET, GREY+'-->', '['+str(it['status'])+']'+RESET)
+        if args.verbose or args.evidence:
+            print('\t', GREY+'Evidence:', it['evidence']+RESET)
+            print('\t', GREY+'Regex:', it['regex']+RESET)
+    #print('\n'.join([url for url in urls]))
+    sys.exit(0)
             
     print('\nPOSSIBLE EMAILS:\n=====================================')
     mails = crawler.get_emails()
