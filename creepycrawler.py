@@ -5,29 +5,36 @@ import os
 import argparse
 import requests
 import re
-#from bs4 import BeautifulSoup
 from urllib3.exceptions import InsecureRequestWarning
 
-class Crawler():
-    external_urls: list
-    __urls: dict
-    visited_urls: dict
-    crawling_urls: list
-    next_urls: list
-    #mail_patt = '[A-z][0-9A-z\-\_\.]+\@[0-9A-z\-\_\.]+[a-z]'
-    emails: list
-    host: str
-    protocol: str
+from threading import Thread
 
-    # Links that often do not end up inside html tags, but can still be interesting
+class Crawler():
+    external_urls: list # Found urls that link to external pages
+    __urls: dict # Found urls with status codes, length, evidence and regex that found it
+    visited_urls: dict # Urls that have been visited already
+    crawling_urls: list # Urls that are currently being crawled
+    next_urls: list # Next urls in line to visit
+    emails: list # Found email adresses
+    ip_v: dict
+    host: str # Host as derived from the provided base url
+    protocol: str # Protocol as derived from the provided base url
+
+    # Link patterns
     links_patt = [
         '^.*(?P<link>http[s]{0,1}\:\/\/[^\"]+\.[^\"^\<^\>]+).*$', #general links
         '^(.*(href|link|action|value|src|srcset)\=\"(?P<link>[^\"^\<^\>]+)\".*)+$', # links in tags
         '.*(?P<link>g.co/[^\^\<^\>"]*)$' # google specific link often embedded in text, not in tags
     ]
 
+    # email patterns
     mail_patt = [
         '[A-z][0-9A-z\-\_\.]+\@[0-9A-z\-\_\.]+[a-z]'
+    ]
+
+    # IP addresses and version numbers
+    ip_v_patt = [
+        '[A-z0-9\-\_]*\d[\d\.]+\.\d+' # IPv4 adresses and possible version numbers
     ]
     
 
@@ -35,13 +42,14 @@ class Crawler():
         self.external_urls = {}
         self.__urls = {}
         self.visited_urls = {}
-        self.visited_status = []
         self.crawling_urls = []
         self.next_urls = []
         self.emails = {}
+        self.ip_v = {}
         self.depth=depth
+        if not(self.depth):
+            self.depth=1000000000
         self.term_width = os.get_terminal_size().columns
-        print(self.term_width)
 
         if baseurl.startswith('http://'):
             self.protocol = 'http://'
@@ -56,11 +64,12 @@ class Crawler():
         print('PROTOCOL:', self.protocol)
         print('HOST:', self.host)
 
-    def run(self, url, verify=True):
+    def run(self, url, verify=True, nr_threads=4):
         """
         Run creepycrawler on specified url.
         """
         # Initial request
+        self.verify=verify
         print('Getting baseurl', url)
         resp = self.get(url=url, verify=verify)
         if not(resp):
@@ -68,33 +77,66 @@ class Crawler():
             print('Exiting')
             sys.exit(1)
         print('Retrieving links')
-        self.__retrieve_links_re(html=resp, baseurl=url)
+        self.__retrieve_links(html=resp, baseurl=url)
         print('Retrieving emails')
         self.__retrieve_emailaddr(html=resp, baseurl=url)
 
+        threads=[]
+
         try:
             print('Start of crawling')
-            # Crawling
             i=0
             while (i<=self.depth):
                 i+=1
-                print('Crawling depth:', i)
                 self.crawling_urls = self.next_urls[:]
+                nr_links = len(self.crawling_urls)
+                if nr_threads > nr_links:
+                    nr_running = nr_links
+                else:
+                    nr_running = nr_threads
+
+                try:
+                    nr_links_t = nr_links//nr_running # Zero division means no more links
+                except Exception as e:
+                    print('\nNo more links')
+                    return
+
+                nr_links_rem = nr_links-(nr_links_t*nr_running)
+                print('Starting', nr_running, 'threads for', nr_links, 'links')
                 self.next_urls=[]
-                for link in self.crawling_urls:
-                    string = 'Visiting: '+link
-                    print(string+((self.term_width-len(string))*' '), end='\r')
-                    resp = self.get(url=link, verify=verify)
-                    if resp:
-                        self.__retrieve_links_re(html=resp, baseurl=link)
-                        self.__retrieve_emailaddr(html=resp, baseurl=link)
+                for div in range(0, nr_running):
+                    start=div*nr_links_t
+                    end=(div+1)*nr_links_t
+                    if div==(nr_running-1):
+                        end=nr_links
+                    crawl_urls=self.crawling_urls[start:end]
+                    threads.append(Thread(target=self.__visit_next_urls, args=(crawl_urls,)))
+                    threads[-1].start()
+
+                for thread in threads:
+                    thread.join()
+                threads=[]
         except KeyboardInterrupt:
+            for thread in threads:
+                thread.join()
             print('\nStopping')
         except Exception as e:
-            print('Error:', e, file=sys.stderr)
+            for thread in threads:
+                thread.join()
+            print('Error Crawler.run():', e, file=sys.stderr)
                 
         print('Visited', len(self.visited_urls))
-            
+
+    def __visit_next_urls(self, crawl_urls):
+        for link in crawl_urls:
+            string = 'Visiting: '+link
+            self.term_width = os.get_terminal_size().columns
+            print(string+((self.term_width-len(string))*' '), end='\r')
+            resp = self.get(url=link, verify=self.verify)
+            if resp:
+                self.__retrieve_links(html=resp, baseurl=link)
+                self.__retrieve_emailaddr(html=resp, baseurl=link)
+                self.__retrieve_ip_v(text=resp, baseurl=link)
 
     def get(self, url, verify=True):
         '''
@@ -110,7 +152,8 @@ class Crawler():
                 if url in self.__urls:
                     self.__urls[url]['status'] = res.status_code
                     self.__urls[url]['length'] = len(res.text)
-                #self.visited_status.append(res.status_code)
+                    self.__urls[url]['headers'] = res.headers
+                    self.__retrieve_ip_v(text=res.headers, baseurl=url+' (headers)')
 
                 return res.text
         except Exception as e:
@@ -131,6 +174,34 @@ class Crawler():
     def get_emails(self):
         return self.emails
 
+    def get_ip_v(self):
+        return self.ip_v
+
+    def __retrieve_ip_v(self, text, baseurl):
+        """
+        Retrieve IP addresses and version numbers based on regular expressions
+        """
+        if not baseurl in self.ip_v:
+            self.ip_v[baseurl] = {}
+
+        if not(type(text) == str):
+            contents = []
+            for head, cont in text.items():
+                for patt in self.ip_v_patt:
+                    if re.findall(patt, cont):
+                        self.ip_v[baseurl]['ip_v'] = re.findall(patt, cont)
+                        self.ip_v[baseurl]['evidence'] = cont
+                        self.ip_v[baseurl]['regex'] = patt
+        else:
+            for patt in self.ip_v_patt:
+                if re.findall(patt, text):
+                    self.ip_v[baseurl]['ip_v'] = re.findall(patt, text)
+                    self.ip_v[baseurl]['evidence'] = text
+                    self.ip_v[baseurl]['regex'] = patt
+
+        if 'ip_v' in self.ip_v[baseurl]:
+            self.ip_v[baseurl]['ip_v'] = self.__rm_dupl(self.ip_v[baseurl]['ip_v'])
+
     def __retrieve_emailaddr(self, html, baseurl):
         """
         Retrieve email addresses from HTML based on regular expressions
@@ -140,11 +211,10 @@ class Crawler():
 
         self.emails[baseurl] = self.__rm_dupl(self.emails[baseurl])
 
-    def __retrieve_links_re(self, html, baseurl):
+    def __retrieve_links(self, html, baseurl):
         """
         Retrieve links from HTML based on regular expressions.
         """
-        #search_patt='^(.*(http[s]{,1}\:\/\/|href|link|action|value|src|srcset)\=\"(?P<link>[^\"]+)\".*)+$'
         html = html.split(' ')
         tmp_html = []
         for i in range(len(html)):
@@ -189,41 +259,8 @@ class Crawler():
             else:
                 self.external_urls[baseurl].append(link)
 
-        #print('\n'.join(self.next_urls))
-        #print('\n'.join(self.external_urls[baseurl]))
         return links
         
-    def __retrieve_links(self, html, baseurl):
-        soup = BeautifulSoup(html, 'html.parser')
-
-        re_res=re.findall('https\:\/\/[A-z0-9\.\:\-\_\=\+\?\~\/\&\;]+', html)
-        links = []
-        soup_res = soup.find_all('a')+soup.find_all('link')
-        print('\n', '\n'.join(re_res), '\n')
-        for link in soup_res:
-            path = link.get('href')
-            print(path)
-            if path:
-                if path.startswith('/'):
-                    path = baseurl.split(':')[0]+path
-                elif path.startswith('#'):
-                    path = baseurl+'/'+path
-                elif path.startswith('/'):
-                    path = baseurl+path
-
-                links.append(path)
-
-
-        self.external_urls[baseurl] = []
-        for link in links:
-            if link.startswith(baseurl) and not(link in self.visited_urls or link in self.crawling_urls):
-                self.next_urls.append(link)
-            else:
-                self.external_urls[baseurl].append(link)
-
-        self.next_urls = self.__rm_dupl(self.next_urls)
-        self.external_urls[baseurl] = self.__rm_dupl(self.external_urls[baseurl])
-
     def __rm_dupl(self, l):
         return list(dict.fromkeys(l))
 
@@ -238,7 +275,11 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-u', '--url', help='The base URL to start crawling from', required=True)
-    parser.add_argument('-d', '--crawl-depth', help='The crawl depth to use, default is 10')
+    parser.add_argument('-d', '--crawl-depth', help='The crawl depth to use, default is 10', type=int)
+    parser.add_argument('-o', '--output-file', help='File to write the output into')
+    parser.add_argument('-t', '--threads',
+                        help='Maximum number of threads to run simultaneously (default is 4)',
+                        type=int)
     parser.add_argument('-a', '--all', help='Try to find all types of information',
                             action='store_true')
     parser.add_argument('-k', '--insecure', help='Allow insecure connections when using SSL',
@@ -259,9 +300,23 @@ def main():
     
     if args.insecure:
         requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
-    
-    crawler = Crawler(baseurl=args.url)
-    crawler.run(url=args.url, verify=not(args.insecure))
+
+    if args.crawl_depth:
+        depth=args.crawl_depth
+    else:
+        depth=10
+
+    if args.threads:
+        if args.threads>100:
+            print('[!] ERROR: Too many threads, please enter a number lower than',
+                  100, file=sys.stderr)
+            sys.exit(1)
+        threads=args.threads
+    else:
+        threads=4
+        
+    crawler = Crawler(baseurl=args.url, depth=depth)
+    crawler.run(url=args.url, verify=not(args.insecure), nr_threads=threads)
     
     print('\nINTERNAL LINKS:\n=====================================')
     urls = crawler.get_urls()
@@ -273,8 +328,6 @@ def main():
         if args.verbose or args.evidence:
             print('\t', GREY+'Evidence:', it['evidence']+RESET)
             print('\t', GREY+'Regex:', it['regex']+RESET)
-    #print('\n'.join([url for url in urls]))
-    sys.exit(0)
             
     print('\nPOSSIBLE EMAILS:\n=====================================')
     mails = crawler.get_emails()
@@ -289,6 +342,17 @@ def main():
         if links:
             #print(baseurl, ':')
             print('\n'.join([link for link in links]))
+
+    print('\nIP ADRESSES AND VERSION NUMBERS:\n====================')
+    urls = crawler.get_ip_v()
+    for baseurl, ip_v in urls.items():
+        if ip_v:
+            #print(baseurl)
+            print('\n'.join([item for item in ip_v['ip_v']]))
+            if args.verbose or args.evidence:
+                print('\t', GREY+baseurl+RESET)
+                print('\t', GREY+ip_v['evidence']+RESET)
+                print('\t', GREY+ip_v['regex']+RESET)
 
 
 if __name__=='__main__':
