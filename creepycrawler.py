@@ -34,7 +34,7 @@ class Crawler():
 
     # IP addresses and version numbers
     ip_v_patt = [
-        '[A-z0-9\-\_]*\d[\d\.]+\.\d+' # IPv4 adresses and possible version numbers
+        '[A-z0-9\-\_]*\d[\d\.]+\.\d+' # Possible IPv4 adresses and version numbers
     ]
     
 
@@ -85,7 +85,7 @@ class Crawler():
 
         try:
             print('Start of crawling')
-            i=0
+            i=1
             while (i<=self.depth):
                 i+=1
                 self.crawling_urls = self.next_urls[:]
@@ -168,14 +168,55 @@ class Crawler():
         #return self.visited_urls
         return self.__urls
 
+    def get_int_urls(self):
+        """
+        Get internal urls
+        """
+        int_urls = {}
+        for url,items in self.__urls.items():
+            if self.is_internal(url=url):#url.startswith(self.protocol+self.host):
+                int_urls[url]=items
+        return int_urls
+
     def get_ext_urls(self):
-        return self.external_urls
+        """
+        """
+        ext_urls = {}
+        for url,items in self.__urls.items():
+            if self.is_external(url=url):# not(url.startswith(self.protocol+self.host)):
+                ext_urls[url]=items
+        return ext_urls
+
+    def get_subdomains(self):
+        """
+        """
+        subdom_url = {}
+        for url,items in self.__urls.items():
+            if self.is_subdomain(url=url):
+                subdom_url[url]=items
+        return subdom_url
 
     def get_emails(self):
         return self.emails
 
     def get_ip_v(self):
         return self.ip_v
+
+    def is_internal(self, url):
+        """
+        """
+        return (url.startswith(self.protocol+self.host) or \
+                url.startswith(self.protocol+'www.'+self.host))
+
+    def is_subdomain(self, url):
+        """
+        """
+        return (self.host in url) and not(self.is_internal(url))
+
+    def is_external(self, url):
+        """
+        """
+        return not(self.is_internal(url) or self.is_subdomain(url))
 
     def __retrieve_ip_v(self, text, baseurl):
         """
@@ -254,10 +295,10 @@ class Crawler():
         self.external_urls[baseurl] = []
         links = self.__rm_dupl(links)
         for link in links:
-            if link.startswith(baseurl) and not(link in self.visited_urls or link in self.crawling_urls):
+            if self.is_internal(link) and not(link in self.visited_urls or link in self.crawling_urls):
                 self.next_urls.append(link)
-            else:
-                self.external_urls[baseurl].append(link)
+            else: # obsolete
+                self.external_urls[baseurl].append(link) # obsolete
 
         return links
         
@@ -300,8 +341,10 @@ def main():
         _print=True
 
     if args.no_colours:
-        BOLD=''
+        BOLD_WHITE=''
+        FAINT_WHITE=''
         RED=''
+        GREEN=''
         GREY=''
         RESET=''
     
@@ -329,7 +372,7 @@ def main():
         with open(fd, 'w') as f:
             print('\nINTERNAL LINKS:\n=====================================',
                   file=f)
-            urls = crawler.get_urls()
+            urls = crawler.get_int_urls()
             for url,it in urls.items():
                 if it['status'] == 200:
                     print(BOLD_WHITE+url+RESET, GREEN+'-->', '['+str(it['status'])+']'+RESET,
@@ -348,17 +391,39 @@ def main():
             mails = crawler.get_emails()
             for baseurl, addrs in mails.items():
                 if addrs:
-                    #print(baseurl, ':')
                     print('\n'.join([addr for addr in addrs]),
+                          file=f)
+
+            print('\nSUBDOMAINS:\n=====================================',
+                  file=f)
+            urls = crawler.get_subdomains()
+            for url,it in urls.items():
+                if it['status'] == 200:
+                    print(BOLD_WHITE+url+RESET, GREEN+'-->', '['+str(it['status'])+']'+RESET,
+                          file=f)
+                else:
+                    print(FAINT_WHITE+url+RESET, GREY+'-->', '['+str(it['status'])+']'+RESET,
+                          file=f)
+                if args.verbose or args.evidence:
+                    print('\t', GREY+'Evidence:', it['evidence']+RESET,
+                          file=f)
+                    print('\t', GREY+'Regex:', it['regex']+RESET,
                           file=f)
             
             print('\nEXTERNAL LINKS:\n=====================================',
                   file=f)
             urls = crawler.get_ext_urls()
-            for baseurl, links in urls.items():
-                if links:
-                    #print(baseurl, ':')
-                    print('\n'.join([link for link in links]),
+            for url,it in urls.items():
+                if it['status'] == 200:
+                    print(BOLD_WHITE+url+RESET, GREEN+'-->', '['+str(it['status'])+']'+RESET,
+                          file=f)
+                else:
+                    print(FAINT_WHITE+url+RESET, GREY+'-->', '['+str(it['status'])+']'+RESET,
+                          file=f)
+                if args.verbose or args.evidence:
+                    print('\t', GREY+'Evidence:', it['evidence']+RESET,
+                          file=f)
+                    print('\t', GREY+'Regex:', it['regex']+RESET,
                           file=f)
 
             print('\nIP ADRESSES AND VERSION NUMBERS:\n====================',
@@ -379,7 +444,7 @@ def main():
 
     else:
         print('\nINTERNAL LINKS:\n=====================================')
-        urls = crawler.get_urls()
+        urls = crawler.get_int_urls()
         for url,it in urls.items():
             if it['status'] == 200:
                 print(BOLD_WHITE+url+RESET, GREEN+'-->', '['+str(it['status'])+']'+RESET)
@@ -396,12 +461,27 @@ def main():
                 #print(baseurl, ':')
                 print('\n'.join([addr for addr in addrs]))
             
+        print('\nSUBDOMAINS:\n=====================================')
+        urls = crawler.get_subdomains()
+        for url,it in urls.items():
+            if it['status'] == 200:
+                print(BOLD_WHITE+url+RESET, GREEN+'-->', '['+str(it['status'])+']'+RESET)
+            else:
+                print(FAINT_WHITE+url+RESET, GREY+'-->', '['+str(it['status'])+']'+RESET)
+            if args.verbose or args.evidence:
+                print('\t', GREY+'Evidence:', it['evidence']+RESET)
+                print('\t', GREY+'Regex:', it['regex']+RESET)
+
         print('\nEXTERNAL LINKS:\n=====================================')
         urls = crawler.get_ext_urls()
-        for baseurl, links in urls.items():
-            if links:
-                #print(baseurl, ':')
-                print('\n'.join([link for link in links]))
+        for url,it in urls.items():
+            if it['status'] == 200:
+                print(BOLD_WHITE+url+RESET, GREEN+'-->', '['+str(it['status'])+']'+RESET)
+            else:
+                print(FAINT_WHITE+url+RESET, GREY+'-->', '['+str(it['status'])+']'+RESET)
+            if args.verbose or args.evidence:
+                print('\t', GREY+'Evidence:', it['evidence']+RESET)
+                print('\t', GREY+'Regex:', it['regex']+RESET)
 
         print('\nIP ADRESSES AND VERSION NUMBERS:\n====================')
         urls = crawler.get_ip_v()
