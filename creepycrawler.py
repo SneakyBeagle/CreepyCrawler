@@ -292,6 +292,13 @@ def main():
                             action='store_true')
     args = parser.parse_args()
 
+    fd = sys.stdout
+    _print=False
+    if args.output_file:
+        args.no_colours = True
+        fd = args.output_file
+        _print=True
+
     if args.no_colours:
         BOLD=''
         RED=''
@@ -317,42 +324,95 @@ def main():
         
     crawler = Crawler(baseurl=args.url, depth=depth)
     crawler.run(url=args.url, verify=not(args.insecure), nr_threads=threads)
-    
-    print('\nINTERNAL LINKS:\n=====================================')
-    urls = crawler.get_urls()
-    for url,it in urls.items():
-        if it['status'] == 200:
-            print(BOLD_WHITE+url+RESET, GREEN+'-->', '['+str(it['status'])+']'+RESET)
-        else:
-            print(FAINT_WHITE+url+RESET, GREY+'-->', '['+str(it['status'])+']'+RESET)
-        if args.verbose or args.evidence:
-            print('\t', GREY+'Evidence:', it['evidence']+RESET)
-            print('\t', GREY+'Regex:', it['regex']+RESET)
-            
-    print('\nPOSSIBLE EMAILS:\n=====================================')
-    mails = crawler.get_emails()
-    for baseurl, addrs in mails.items():
-        if addrs:
-            #print(baseurl, ':')
-            print('\n'.join([addr for addr in addrs]))
-            
-    print('\nEXTERNAL LINKS:\n=====================================')
-    urls = crawler.get_ext_urls()
-    for baseurl, links in urls.items():
-        if links:
-            #print(baseurl, ':')
-            print('\n'.join([link for link in links]))
 
-    print('\nIP ADRESSES AND VERSION NUMBERS:\n====================')
-    urls = crawler.get_ip_v()
-    for baseurl, ip_v in urls.items():
-        if ip_v:
-            #print(baseurl)
-            print('\n'.join([item for item in ip_v['ip_v']]))
+    if _print:
+        with open(fd, 'w') as f:
+            print('\nINTERNAL LINKS:\n=====================================',
+                  file=f)
+            urls = crawler.get_urls()
+            for url,it in urls.items():
+                if it['status'] == 200:
+                    print(BOLD_WHITE+url+RESET, GREEN+'-->', '['+str(it['status'])+']'+RESET,
+                          file=f)
+                else:
+                    print(FAINT_WHITE+url+RESET, GREY+'-->', '['+str(it['status'])+']'+RESET,
+                          file=f)
+                if args.verbose or args.evidence:
+                    print('\t', GREY+'Evidence:', it['evidence']+RESET,
+                          file=f)
+                    print('\t', GREY+'Regex:', it['regex']+RESET,
+                          file=f)
+            
+            print('\nPOSSIBLE EMAILS:\n=====================================',
+                  file=f)
+            mails = crawler.get_emails()
+            for baseurl, addrs in mails.items():
+                if addrs:
+                    #print(baseurl, ':')
+                    print('\n'.join([addr for addr in addrs]),
+                          file=f)
+            
+            print('\nEXTERNAL LINKS:\n=====================================',
+                  file=f)
+            urls = crawler.get_ext_urls()
+            for baseurl, links in urls.items():
+                if links:
+                    #print(baseurl, ':')
+                    print('\n'.join([link for link in links]),
+                          file=f)
+
+            print('\nIP ADRESSES AND VERSION NUMBERS:\n====================',
+                  file=f)
+            urls = crawler.get_ip_v()
+            for baseurl, ip_v in urls.items():
+                if ip_v:
+                    #print(baseurl)
+                    print('\n'.join([item for item in ip_v['ip_v']]),
+                          file=f)
+                    if args.verbose or args.evidence:
+                        print('\t', GREY+baseurl+RESET,
+                              file=f)
+                        print('\t', GREY+ip_v['evidence']+RESET,
+                              file=f)
+                        print('\t', GREY+ip_v['regex']+RESET,
+                              file=f)
+
+    else:
+        print('\nINTERNAL LINKS:\n=====================================')
+        urls = crawler.get_urls()
+        for url,it in urls.items():
+            if it['status'] == 200:
+                print(BOLD_WHITE+url+RESET, GREEN+'-->', '['+str(it['status'])+']'+RESET)
+            else:
+                print(FAINT_WHITE+url+RESET, GREY+'-->', '['+str(it['status'])+']'+RESET)
             if args.verbose or args.evidence:
-                print('\t', GREY+baseurl+RESET)
-                print('\t', GREY+ip_v['evidence']+RESET)
-                print('\t', GREY+ip_v['regex']+RESET)
+                print('\t', GREY+'Evidence:', it['evidence']+RESET)
+                print('\t', GREY+'Regex:', it['regex']+RESET)
+            
+        print('\nPOSSIBLE EMAILS:\n=====================================')
+        mails = crawler.get_emails()
+        for baseurl, addrs in mails.items():
+            if addrs:
+                #print(baseurl, ':')
+                print('\n'.join([addr for addr in addrs]))
+            
+        print('\nEXTERNAL LINKS:\n=====================================')
+        urls = crawler.get_ext_urls()
+        for baseurl, links in urls.items():
+            if links:
+                #print(baseurl, ':')
+                print('\n'.join([link for link in links]))
+
+        print('\nIP ADRESSES AND VERSION NUMBERS:\n====================')
+        urls = crawler.get_ip_v()
+        for baseurl, ip_v in urls.items():
+            if ip_v:
+                #print(baseurl)
+                print('\n'.join([item for item in ip_v['ip_v']]))
+                if args.verbose or args.evidence:
+                    print('\t', GREY+baseurl+RESET)
+                    print('\t', GREY+ip_v['evidence']+RESET)
+                    print('\t', GREY+ip_v['regex']+RESET)
 
 
 if __name__=='__main__':
