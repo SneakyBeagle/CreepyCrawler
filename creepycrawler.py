@@ -66,14 +66,17 @@ class Crawler():
         print('PROTOCOL:', self.protocol)
         print('HOST:', self.host)
 
-    def run(self, url, verify=True, nr_threads=4):
+    def run(self, url, verify=True, nr_threads=4, timeout=2):
         """
         Run creepycrawler on specified url.
         """
-        # Initial request
+        # Set some members
         self.verify=verify
+        self.timeout=timeout
+        
+        # Initial request
         print('Getting baseurl', url)
-        resp = self.get(url=url, verify=verify)
+        resp = self.get(url=url, verify=verify, printerror=True, timeout=self.timeout)
         if not(resp):
             print('[ERROR], cannot GET baseurl', url, '...')
             print('Exiting')
@@ -104,7 +107,7 @@ class Crawler():
                     return
 
                 nr_links_rem = nr_links-(nr_links_t*nr_running)
-                print('Starting', nr_running, 'threads for', nr_links, 'links')
+                print('\nStarting', nr_running, 'threads for', nr_links, 'links')
                 self.next_urls=[]
                 for div in range(0, nr_running):
                     start=div*nr_links_t
@@ -135,7 +138,7 @@ class Crawler():
                 string = 'Visiting: '+link
                 self.term_width = os.get_terminal_size().columns
                 print(string+((self.term_width-len(string))*' '), end='\r')
-                resp = self.get(url=link, verify=self.verify)
+                resp = self.get(url=link, verify=self.verify, timeout=self.timeout)
                 if resp:
                     self.__retrieve_links(html=resp, baseurl=link)
                     self.__retrieve_emailaddr(html=resp, baseurl=link)
@@ -144,20 +147,20 @@ class Crawler():
                 string = 'Visiting: '+link
                 self.term_width = os.get_terminal_size().columns
                 print(string+((self.term_width-len(string))*' '), end='\r')
-                resp = self.get(url=link, verify=self.verify)
+                resp = self.get(url=link, verify=self.verify, timeout=self.timeout)
                 if resp:
                     self.__retrieve_links(html=resp, baseurl=link)
                     self.__retrieve_emailaddr(html=resp, baseurl=link)
                     self.__retrieve_ip_v(text=resp, baseurl=link)
                 
 
-    def get(self, url, verify=True):
+    def get(self, url, verify=True, printerror=False, timeout=2):
         '''
         Try GET request to URL and save the response in visited_urls.
         '''
         try:
             if not(url in self.visited_urls):
-                res = requests.get(url, verify=verify)
+                res = requests.get(url, verify=verify, timeout=timeout)
                 self.visited_urls[url] = {'html': res.text,
                                           'headers': res.headers,
                                           'status': res.status_code,
@@ -170,7 +173,8 @@ class Crawler():
 
                 return res.text
         except Exception as e:
-            print('[ERROR], could not do GET request to', url, '->', e)
+            if printerror:
+                print('[ERROR], could not do GET request to', url, '->', e, file=sys.stderr)
             return None
     
 
@@ -345,7 +349,10 @@ def main():
     parser.add_argument('-d', '--crawl-depth', help='The crawl depth to use, default is 10', type=int)
     parser.add_argument('-o', '--output-file', help='File to write the output into')
     parser.add_argument('-t', '--threads',
-                        help='Maximum number of threads to run simultaneously (default is 4)',
+                        help='Maximum number of threads to run simultaneously (default is 100)',
+                        type=int)
+    parser.add_argument('--timeout',
+                        help='Timeout for requests, default is 10s',
                         type=int)
     parser.add_argument('-a', '--all', help='Try to find all types of information',
                             action='store_true')
@@ -391,10 +398,15 @@ def main():
             sys.exit(1)
         threads=args.threads
     else:
-        threads=4
+        threads=100
+
+    if args.timeout:
+        timeout=args.timeout
+    else:
+        timeout=2
         
     crawler = Crawler(baseurl=args.url, depth=depth, exclude=args.exclude)
-    crawler.run(url=args.url, verify=not(args.insecure), nr_threads=threads)
+    crawler.run(url=args.url, verify=not(args.insecure), nr_threads=threads, timeout=timeout)
 
     if _print:
         with open(fd, 'w') as f:
