@@ -38,7 +38,7 @@ class Crawler():
     ]
     
 
-    def __init__(self, baseurl, depth=10):
+    def __init__(self, baseurl, depth=1, exclude=None):
         self.external_urls = {}
         self.__urls = {}
         self.visited_urls = {}
@@ -47,6 +47,8 @@ class Crawler():
         self.emails = {}
         self.ip_v = {}
         self.depth=depth
+        self.exclude=exclude
+        
         if not(self.depth):
             self.depth=1000000000
         self.term_width = os.get_terminal_size().columns
@@ -125,18 +127,29 @@ class Crawler():
                 thread.join()
             print('Error Crawler.run():', e, file=sys.stderr)
                 
-        print('Visited', len(self.visited_urls))
+        print('\nVisited', len(self.visited_urls))
 
     def __visit_next_urls(self, crawl_urls):
         for link in crawl_urls:
-            string = 'Visiting: '+link
-            self.term_width = os.get_terminal_size().columns
-            print(string+((self.term_width-len(string))*' '), end='\r')
-            resp = self.get(url=link, verify=self.verify)
-            if resp:
-                self.__retrieve_links(html=resp, baseurl=link)
-                self.__retrieve_emailaddr(html=resp, baseurl=link)
-                self.__retrieve_ip_v(text=resp, baseurl=link)
+            if self.exclude and not(self.exclude in link):
+                string = 'Visiting: '+link
+                self.term_width = os.get_terminal_size().columns
+                print(string+((self.term_width-len(string))*' '), end='\r')
+                resp = self.get(url=link, verify=self.verify)
+                if resp:
+                    self.__retrieve_links(html=resp, baseurl=link)
+                    self.__retrieve_emailaddr(html=resp, baseurl=link)
+                    self.__retrieve_ip_v(text=resp, baseurl=link)
+            elif not(self.exclude):
+                string = 'Visiting: '+link
+                self.term_width = os.get_terminal_size().columns
+                print(string+((self.term_width-len(string))*' '), end='\r')
+                resp = self.get(url=link, verify=self.verify)
+                if resp:
+                    self.__retrieve_links(html=resp, baseurl=link)
+                    self.__retrieve_emailaddr(html=resp, baseurl=link)
+                    self.__retrieve_ip_v(text=resp, baseurl=link)
+                
 
     def get(self, url, verify=True):
         '''
@@ -199,8 +212,15 @@ class Crawler():
     def get_emails(self):
         return self.emails
 
-    def get_ip_v(self):
-        return self.ip_v
+    def get_ip_v(self, as_dict=True):
+        if as_dict:
+            return self.ip_v
+        else:
+            ip_v = []
+            for url,item in self.ip_v.items():
+                if item:
+                    ip_v+=item['ip_v']
+            return self.__rm_dupl(ip_v)
 
     def is_internal(self, url):
         """
@@ -331,6 +351,8 @@ def main():
                             action='store_true')
     parser.add_argument('--no-colours', help='No colours',
                             action='store_true')
+    parser.add_argument('--exclude', help='Exclude URLs that include this string')
+    
     args = parser.parse_args()
 
     fd = sys.stdout
@@ -365,7 +387,7 @@ def main():
     else:
         threads=4
         
-    crawler = Crawler(baseurl=args.url, depth=depth)
+    crawler = Crawler(baseurl=args.url, depth=depth, exclude=args.exclude)
     crawler.run(url=args.url, verify=not(args.insecure), nr_threads=threads)
 
     if _print:
@@ -428,19 +450,22 @@ def main():
 
             print('\nIP ADRESSES AND VERSION NUMBERS:\n====================',
                   file=f)
-            urls = crawler.get_ip_v()
-            for baseurl, ip_v in urls.items():
-                if ip_v:
-                    #print(baseurl)
-                    print('\n'.join([item for item in ip_v['ip_v']]),
-                          file=f)
-                    if args.verbose or args.evidence:
+            if args.verbose or args.evidence:
+                urls = crawler.get_ip_v()
+                for baseurl, ip_v in urls.items():
+                    if ip_v:
+                        #print(baseurl)
+                        print('\n'.join([item for item in ip_v['ip_v']]),
+                              file=f)
                         print('\t', GREY+baseurl+RESET,
                               file=f)
                         print('\t', GREY+ip_v['evidence']+RESET,
                               file=f)
                         print('\t', GREY+ip_v['regex']+RESET,
                               file=f)
+            else:
+                ip_vs = crawler.get_ip_v(as_dict=False)
+                print('\n'.join([i for i in ip_vs]), file=f)
 
     else:
         print('\nINTERNAL LINKS:\n=====================================')
@@ -484,15 +509,19 @@ def main():
                 print('\t', GREY+'Regex:', it['regex']+RESET)
 
         print('\nIP ADRESSES AND VERSION NUMBERS:\n====================')
-        urls = crawler.get_ip_v()
-        for baseurl, ip_v in urls.items():
-            if ip_v:
-                #print(baseurl)
-                print('\n'.join([item for item in ip_v['ip_v']]))
-                if args.verbose or args.evidence:
-                    print('\t', GREY+baseurl+RESET)
+        if args.verbose or args.evidence:
+            urls = crawler.get_ip_v()
+            for baseurl, ip_v in urls.items():
+                if ip_v:
+                    #print(baseurl)
+                    print('\n'.join([item for item in ip_v['ip_v']]))
+                    print('\t', GREY+baseurl+RESET,
+                          file=f)
                     print('\t', GREY+ip_v['evidence']+RESET)
                     print('\t', GREY+ip_v['regex']+RESET)
+        else:
+            ip_vs = crawler.get_ip_v(as_dict=False)
+            print('\n'.join([i for i in ip_vs]))
 
 
 if __name__=='__main__':
