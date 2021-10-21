@@ -297,8 +297,8 @@ class Crawler():
                     match = re.search(patt, line)
                     
                     if match:
-                        evidence = match.string #TODO: Add optional evidence to each link
-                        span = match.span() #TODO: Add optional span to each link
+                        evidence = match.string 
+                        span = match.span() 
                         if match['link'].startswith('http://') or match['link'].startswith('https://'):
                             links.append(match['link'])
                         else:
@@ -332,7 +332,6 @@ class Crawler():
     def __rm_dupl(self, l):
         return list(dict.fromkeys(l))
 
-# TODO support for custom headers, cookies, read request from file, other request methods, form actions
 def main():
     BOLD_WHITE = '\033[1m\033[37m'
     FAINT_WHITE = '\033[2m\033[37m'
