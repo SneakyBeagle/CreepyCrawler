@@ -209,8 +209,15 @@ class Crawler():
                 subdom_url[url]=items
         return subdom_url
 
-    def get_emails(self):
-        return self.emails
+    def get_emails(self, as_dict=True):
+        if as_dict:
+            return self.emails
+        else:
+            mails = []
+            for url,item in self.emails.items():
+                if item:
+                    mails+=item
+            return self.__rm_dupl(mails)
 
     def get_ip_v(self, as_dict=True):
         if as_dict:
@@ -376,7 +383,7 @@ def main():
     if args.crawl_depth:
         depth=args.crawl_depth
     else:
-        depth=10
+        depth=1
 
     if args.threads:
         if args.threads>100:
@@ -392,8 +399,15 @@ def main():
 
     if _print:
         with open(fd, 'w') as f:
-            print('\nINTERNAL LINKS:\n=====================================',
-                  file=f)
+            print('# Crawl report', args.url, file=f)
+            print('* (Internal Links)[#internal_links]', file=f)
+            print('* (Possible Emails)[#possible_emails]', file=f)
+            print('* (Subdomains)[#subdomains]', file=f)
+            print('* (External Links)[#external_links]', file=f)
+            print('* (IP Addresses and Version Numbers)[#ip_addresses_and_version_numbers]', file=f)
+            
+            print('\n## INTERNAL LINKS ##\n', file=f)
+            print('* (Back to Top)[crawl_report]', file=f)
             urls = crawler.get_int_urls()
             for url,it in urls.items():
                 if it['status'] == 200:
@@ -408,16 +422,20 @@ def main():
                     print('\t', GREY+'Regex:', it['regex']+RESET,
                           file=f)
             
-            print('\nPOSSIBLE EMAILS:\n=====================================',
-                  file=f)
-            mails = crawler.get_emails()
-            for baseurl, addrs in mails.items():
-                if addrs:
-                    print('\n'.join([addr for addr in addrs]),
-                          file=f)
+            print('\n## POSSIBLE EMAILS ##\n', file=f)
+            print('* (Back to Top)[crawl_report]', file=f)
+            if args.verbose or args.evidence:
+                mails = crawler.get_emails()
+                for baseurl, addrs in mails.items():
+                    if addrs:
+                        print('\n'.join([addr for addr in addrs]),
+                              file=f)
+            else:
+                mails = crawler.get_emails(as_dict=False)
+                print('\n'.join([m for m in mails]), file=f)
 
-            print('\nSUBDOMAINS:\n=====================================',
-                  file=f)
+            print('\n## SUBDOMAINS ##\n', file=f)
+            print('* (Back to Top)[crawl_report]', file=f)
             urls = crawler.get_subdomains()
             for url,it in urls.items():
                 if it['status'] == 200:
@@ -432,8 +450,8 @@ def main():
                     print('\t', GREY+'Regex:', it['regex']+RESET,
                           file=f)
             
-            print('\nEXTERNAL LINKS:\n=====================================',
-                  file=f)
+            print('\n## EXTERNAL LINKS ##\n', file=f)
+            print('* (Back to Top)[crawl_report]', file=f)
             urls = crawler.get_ext_urls()
             for url,it in urls.items():
                 if it['status'] == 200:
@@ -448,8 +466,8 @@ def main():
                     print('\t', GREY+'Regex:', it['regex']+RESET,
                           file=f)
 
-            print('\nIP ADRESSES AND VERSION NUMBERS:\n====================',
-                  file=f)
+            print('\n## IP ADDRESSES AND VERSION NUMBERS ##\n', file=f)
+            print('* (Back to Top)[crawl_report]', file=f)
             if args.verbose or args.evidence:
                 urls = crawler.get_ip_v()
                 for baseurl, ip_v in urls.items():
@@ -480,11 +498,14 @@ def main():
                 print('\t', GREY+'Regex:', it['regex']+RESET)
             
         print('\nPOSSIBLE EMAILS:\n=====================================')
-        mails = crawler.get_emails()
-        for baseurl, addrs in mails.items():
-            if addrs:
-                #print(baseurl, ':')
-                print('\n'.join([addr for addr in addrs]))
+        if args.verbose or args.evidence:
+            mails = crawler.get_emails()
+            for baseurl, addrs in mails.items():
+                if addrs:
+                    print('\n'.join([addr for addr in addrs]))
+        else:
+            mails = crawler.get_emails(as_dict=False)
+            print('\n'.join([m for m in mails]))
             
         print('\nSUBDOMAINS:\n=====================================')
         urls = crawler.get_subdomains()
@@ -508,7 +529,7 @@ def main():
                 print('\t', GREY+'Evidence:', it['evidence']+RESET)
                 print('\t', GREY+'Regex:', it['regex']+RESET)
 
-        print('\nIP ADRESSES AND VERSION NUMBERS:\n====================')
+        print('\nIP ADDRESSES AND VERSION NUMBERS:\n====================')
         if args.verbose or args.evidence:
             urls = crawler.get_ip_v()
             for baseurl, ip_v in urls.items():
