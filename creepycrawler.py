@@ -22,7 +22,7 @@ class Crawler():
 
     # Link patterns
     links_patt = [
-        '^.*(?P<link>http[s]{0,1}\:\/\/[^\"]+\.[^\"^\<^\>]+).*$', #general links
+        '^.*(?P<link>http[s]{0,1}\:\/\/[^\"]+\.[^\"^\<^\>^\']+).*$', #general links
         '^(.*(href|link|action|value|src|srcset)\=\"(?P<link>[^\"^\<^\>]+)\".*)+$', # links in tags
         '.*(?P<link>g.co/[^\^\<^\>"]*)$' # google specific link often embedded in text, not in tags
     ]
@@ -172,9 +172,11 @@ class Crawler():
                     self.__retrieve_ip_v(text=res.headers, baseurl=url+' (headers)')
 
                 return res.text
-        except Exception as e:
+        except requests.exceptions.Timeout as e:
             if printerror:
-                print('[ERROR], could not do GET request to', url, '->', e, file=sys.stderr)
+                print('[Warning], could not do GET request to', url, '->', e, file=sys.stderr)
+        except Exception as e:
+            print('[ERROR], could not do GET request to', url, '->', e, file=sys.stderr)
             return None
     
 
@@ -547,8 +549,7 @@ def main():
                 if ip_v:
                     #print(baseurl)
                     print('\n'.join([item for item in ip_v['ip_v']]))
-                    print('\t', GREY+baseurl+RESET,
-                          file=f)
+                    print('\t', GREY+baseurl+RESET)
                     print('\t', GREY+ip_v['evidence']+RESET)
                     print('\t', GREY+ip_v['regex']+RESET)
         else:
