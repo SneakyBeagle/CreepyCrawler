@@ -22,8 +22,8 @@ class Crawler():
 
     # Link patterns
     links_patt = [
-        '^.*(?P<link>http[s]{0,1}\:\/\/[^\"]+\.[^\"^\<^\>^\']+).*$', #general links
-        '^(.*(href|link|action|value|src|srcset)\=\"(?P<link>[^\"^\<^\>]+)\".*)+$', # links in tags
+        '^.*(?P<link>http[s]{0,1}\:\/\/[^\"^\,]+\.[^\"^\<^\>^\'^\,]+).*$', #general links
+        '^(.*(href|link|action|value|src|srcset)\=\"(?P<link>[^\"^\<^\>^\,]+)\".*)+$', # links in tags
         '^(?P<link>\/.*\/)$', # links on robots.txt
         '.*(?P<link>g.co/[^\^\<^\>"]*)$' # google specific link often embedded in text, not in tags
     ]
