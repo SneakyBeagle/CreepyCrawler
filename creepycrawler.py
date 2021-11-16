@@ -24,6 +24,7 @@ class Crawler():
     links_patt = [
         '^.*(?P<link>http[s]{0,1}\:\/\/[^\"]+\.[^\"^\<^\>^\']+).*$', #general links
         '^(.*(href|link|action|value|src|srcset)\=\"(?P<link>[^\"^\<^\>]+)\".*)+$', # links in tags
+        '^(?P<link>\/.*\/)$', # links on robots.txt
         '.*(?P<link>g.co/[^\^\<^\>"]*)$' # google specific link often embedded in text, not in tags
     ]
 
@@ -34,11 +35,29 @@ class Crawler():
 
     # IP addresses and version numbers
     ip_v_patt = [
-        '[A-z0-9\-\_]*\d[\d\.]+\.\d+' # Possible IPv4 adresses and version numbers
+        #'[A-z0-9\-\_]*\d[\d\.]+\.\d+', # Possible IPv4 adresses and version numbers
+        '([\d]{1,3}\.|\-|\_){3}[\d]{1,3}', # IPv4 adresses
+        '[A-z]+\s|\=|\.|\-|\_v|V[\d]{,3}(\.[\d]{,3}){1,2}' # Versions with name in front
     ]
     
 
     def __init__(self, baseurl, depth=1, exclude=None):
+        """
+        Initialise the Crawler by setting members. Also determines the hostname 
+        and the used protocol.
+
+        Parameters
+        ----------
+        baseurl: str
+            The url to start crawling from (currently only supports the root web dir).
+        dept: int (default = 1)
+            The depth to crawl. It is recommended to keep this low, as otherwise it will 
+            all take a long long time to complete. Sets to a very high number if 0 is provided,
+            essentially crawling until there are no more links to follow.
+        exclude: str (default = None)
+            If this parameter is provided, the crawler will compare this string to the
+            found URLs. If there is a match, that URL will be excluded from further requests.
+        """
         self.external_urls = {}
         self.__urls = {}
         self.visited_urls = {}
@@ -73,6 +92,8 @@ class Crawler():
         # Set some members
         self.verify=verify
         self.timeout=timeout
+
+        url=self.prepare_url(url=url)
         
         # Initial request
         print('Getting baseurl', url)
@@ -293,8 +314,12 @@ class Crawler():
         tmp_html = []
         for i in range(len(html)):
             tmp_html += html[i].split(';')
+            tmp_tmp_html = []
+            for j in range(len(tmp_html)):
+                tmp_tmp_html += tmp_html[j].split('\n')
+            
 
-        html = [part for part in tmp_html if part]
+        html = [part for part in tmp_tmp_html if part]
 
         links=[]
         for line in html:
@@ -310,8 +335,8 @@ class Crawler():
                         else:
                             if match['link'].startswith('//'):
                                 links.append(baseurl.split('//')[0]+match['link'])
-                            elif match['link'].startswith('/'):# or match['link'].startswith('#'):
-                                links.append(baseurl+match['link'])
+                            elif match['link'].startswith('/'):
+                                links.append(self.protocol+self.host+match['link'])
                             else:
                                 links.append(baseurl+'/'+match['link'])
                         if links and not(links[-1] in self.__urls):
@@ -323,6 +348,7 @@ class Crawler():
                             self.__urls[links[-1]]['evidence']=evidence
                             self.__urls[links[-1]]['span']=span
                             self.__urls[links[-1]]['regex']=patt
+                            self.__urls[links[-1]]['baseurl']=baseurl
                     
 
         self.external_urls[baseurl] = []
@@ -334,11 +360,22 @@ class Crawler():
                 self.external_urls[baseurl].append(link) # obsolete
 
         return links
-        
+
+    def prepare_url(self, url):
+        if url.endswith('/'):
+           url=url[:-1]
+        if not(url.startswith('http://') or url.startswith('https://')):
+            url='https://'+url
+
+        return url
+    
     def __rm_dupl(self, l):
         return list(dict.fromkeys(l))
 
 def main():
+    """
+    Main function
+    """
     BOLD_WHITE = '\033[1m\033[37m'
     FAINT_WHITE = '\033[2m\033[37m'
     RED = '\033[31m'
@@ -406,7 +443,7 @@ def main():
         timeout=args.timeout
     else:
         timeout=2
-        
+
     crawler = Crawler(baseurl=args.url, depth=depth, exclude=args.exclude)
     crawler.run(url=args.url, verify=not(args.insecure), nr_threads=threads, timeout=timeout)
 
