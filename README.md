@@ -10,21 +10,37 @@ I use/plan on using this tool when doing reconnaissance with pentests
 and such.
 
 ## Advantages
-* Similar parameter usage as cURL and Gobuster (or at least, that is the aim)
 * Regex to find links embedded in page source, instead of ready made
   scraping frameworks. This has the advantage of being able to find
   links, even when not embedded in html tags.
-* Output in Markdown
+* Output in Markdown, SQLite3 DB, XML and more (not all implemented yet)
 * Python
 * Crossplatform
 * Little dependencies
-* Single file, for now at least
+* Single file executable
+
+## Install
+
+### Linux
+```
+./install.sh
+```
+
+### MacOS
+```
+# Not tested yet
+```
+
+### Windows (Really?)
+```
+# Not tested yet
+```
 
 ## Usage
 
 For a detailed help message, use the following
 ```
-./creepycrawler --help
+./creepycrawler.py --help
 ```
 
 Run CreepyCrawler, targeting https://example.com, using a maximum of 100 threads, a crawl depth of 3 (can take a long time if many links are found), outputting the results in example_cc.md

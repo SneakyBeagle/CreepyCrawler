@@ -130,3 +130,7 @@ dmypy.json
 
 # Databases
 *.db
+
+# pyinstaller stuff
+*.spec
+dist/*
