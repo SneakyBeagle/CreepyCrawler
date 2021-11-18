@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
 
+
+## Custom module includes
+from src.db import *
+from src.colours import clr
+
+## Default lib imports
 import sys
 import os
 import argparse
@@ -376,17 +382,11 @@ def main():
     """
     Main function
     """
-    BOLD_WHITE = '\033[1m\033[37m'
-    FAINT_WHITE = '\033[2m\033[37m'
-    RED = '\033[31m'
-    GREEN = '\033[32m'
-    GREY = '\033[37m'
-    RESET = '\033[0m'
-
     parser = argparse.ArgumentParser()
     parser.add_argument('-u', '--url', help='The base URL to start crawling from', required=True)
     parser.add_argument('-d', '--crawl-depth', help='The crawl depth to use, default is 10', type=int)
     parser.add_argument('-o', '--output-file', help='File to write the output into')
+    parser.add_argument('-db', '--database', help='Database to write the output into')
     parser.add_argument('-t', '--threads',
                         help='Maximum number of threads to run simultaneously (default is 100)',
                         type=int)
@@ -414,13 +414,16 @@ def main():
         fd = args.output_file
         _print=True
 
+    if args.database:
+        db=DB(db_name=args.database)
+
     if args.no_colours:
-        BOLD_WHITE=''
-        FAINT_WHITE=''
-        RED=''
-        GREEN=''
-        GREY=''
-        RESET=''
+        clr.BOLD_WHITE=''
+        clr.FAINT_WHITE=''
+        clr.RED=''
+        clr.GREEN=''
+        clr.GREY=''
+        clr.RESET=''
     
     if args.insecure:
         requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
@@ -461,15 +464,15 @@ def main():
             urls = crawler.get_int_urls()
             for url,it in urls.items():
                 if it['status'] == 200:
-                    print(BOLD_WHITE+url+RESET, GREEN+'-->', '['+str(it['status'])+']'+RESET,
+                    print(clr.BOLD_WHITE+url+clr.RESET, clr.GREEN+'-->', '['+str(it['status'])+']'+clr.RESET,
                           file=f)
                 else:
-                    print(FAINT_WHITE+url+RESET, GREY+'-->', '['+str(it['status'])+']'+RESET,
+                    print(clr.FAINT_WHITE+url+clr.RESET, clr.GREY+'-->', '['+str(it['status'])+']'+clr.RESET,
                           file=f)
                 if args.verbose or args.evidence:
-                    print('\t', GREY+'Evidence:', it['evidence']+RESET,
+                    print('\t', clr.GREY+'Evidence:', it['evidence']+clr.RESET,
                           file=f)
-                    print('\t', GREY+'Regex:', it['regex']+RESET,
+                    print('\t', clr.GREY+'Regex:', it['regex']+clr.RESET,
                           file=f)
             
             print('\n## POSSIBLE EMAILS ##\n', file=f)
@@ -489,15 +492,15 @@ def main():
             urls = crawler.get_subdomains()
             for url,it in urls.items():
                 if it['status'] == 200:
-                    print(BOLD_WHITE+url+RESET, GREEN+'-->', '['+str(it['status'])+']'+RESET,
+                    print(clr.BOLD_WHITE+url+clr.RESET, clr.GREEN+'-->', '['+str(it['status'])+']'+clr.RESET,
                           file=f)
                 else:
-                    print(FAINT_WHITE+url+RESET, GREY+'-->', '['+str(it['status'])+']'+RESET,
+                    print(clr.FAINT_WHITE+url+clr.RESET, clr.GREY+'-->', '['+str(it['status'])+']'+clr.RESET,
                           file=f)
                 if args.verbose or args.evidence:
-                    print('\t', GREY+'Evidence:', it['evidence']+RESET,
+                    print('\t', clr.GREY+'Evidence:', it['evidence']+clr.RESET,
                           file=f)
-                    print('\t', GREY+'Regex:', it['regex']+RESET,
+                    print('\t', clr.GREY+'Regex:', it['regex']+clr.RESET,
                           file=f)
             
             print('\n## EXTERNAL LINKS ##\n', file=f)
@@ -505,15 +508,15 @@ def main():
             urls = crawler.get_ext_urls()
             for url,it in urls.items():
                 if it['status'] == 200:
-                    print(BOLD_WHITE+url+RESET, GREEN+'-->', '['+str(it['status'])+']'+RESET,
+                    print(clr.BOLD_WHITE+url+clr.RESET, clr.GREEN+'-->', '['+str(it['status'])+']'+clr.RESET,
                           file=f)
                 else:
-                    print(FAINT_WHITE+url+RESET, GREY+'-->', '['+str(it['status'])+']'+RESET,
+                    print(clr.FAINT_WHITE+url+clr.RESET, clr.GREY+'-->', '['+str(it['status'])+']'+clr.RESET,
                           file=f)
                 if args.verbose or args.evidence:
-                    print('\t', GREY+'Evidence:', it['evidence']+RESET,
+                    print('\t', clr.GREY+'Evidence:', it['evidence']+clr.RESET,
                           file=f)
-                    print('\t', GREY+'Regex:', it['regex']+RESET,
+                    print('\t', clr.GREY+'Regex:', it['regex']+clr.RESET,
                           file=f)
 
             print('\n## IP ADDRESSES AND VERSION NUMBERS ##\n', file=f)
@@ -525,11 +528,11 @@ def main():
                         #print(baseurl)
                         print('\n'.join([item for item in ip_v['ip_v']]),
                               file=f)
-                        print('\t', GREY+baseurl+RESET,
+                        print('\t', clr.GREY+baseurl+clr.RESET,
                               file=f)
-                        print('\t', GREY+ip_v['evidence']+RESET,
+                        print('\t', clr.GREY+ip_v['evidence']+clr.RESET,
                               file=f)
-                        print('\t', GREY+ip_v['regex']+RESET,
+                        print('\t', clr.GREY+ip_v['regex']+clr.RESET,
                               file=f)
             else:
                 ip_vs = crawler.get_ip_v(as_dict=False)
@@ -540,12 +543,12 @@ def main():
         urls = crawler.get_int_urls()
         for url,it in urls.items():
             if it['status'] == 200:
-                print(BOLD_WHITE+url+RESET, GREEN+'-->', '['+str(it['status'])+']'+RESET)
+                print(clr.BOLD_WHITE+url+clr.RESET, clr.GREEN+'-->', '['+str(it['status'])+']'+clr.RESET)
             else:
-                print(FAINT_WHITE+url+RESET, GREY+'-->', '['+str(it['status'])+']'+RESET)
+                print(clr.FAINT_WHITE+url+clr.RESET, clr.GREY+'-->', '['+str(it['status'])+']'+clr.RESET)
             if args.verbose or args.evidence:
-                print('\t', GREY+'Evidence:', it['evidence']+RESET)
-                print('\t', GREY+'Regex:', it['regex']+RESET)
+                print('\t', clr.GREY+'Evidence:', it['evidence']+clr.RESET)
+                print('\t', clr.GREY+'Regex:', it['regex']+clr.RESET)
             
         print('\nPOSSIBLE EMAILS:\n=====================================')
         if args.verbose or args.evidence:
@@ -561,23 +564,23 @@ def main():
         urls = crawler.get_subdomains()
         for url,it in urls.items():
             if it['status'] == 200:
-                print(BOLD_WHITE+url+RESET, GREEN+'-->', '['+str(it['status'])+']'+RESET)
+                print(clr.BOLD_WHITE+url+clr.RESET, clr.GREEN+'-->', '['+str(it['status'])+']'+clr.RESET)
             else:
-                print(FAINT_WHITE+url+RESET, GREY+'-->', '['+str(it['status'])+']'+RESET)
+                print(clr.FAINT_WHITE+url+clr.RESET, clr.GREY+'-->', '['+str(it['status'])+']'+clr.RESET)
             if args.verbose or args.evidence:
-                print('\t', GREY+'Evidence:', it['evidence']+RESET)
-                print('\t', GREY+'Regex:', it['regex']+RESET)
+                print('\t', clr.GREY+'Evidence:', it['evidence']+clr.RESET)
+                print('\t', clr.GREY+'Regex:', it['regex']+clr.RESET)
 
         print('\nEXTERNAL LINKS:\n=====================================')
         urls = crawler.get_ext_urls()
         for url,it in urls.items():
             if it['status'] == 200:
-                print(BOLD_WHITE+url+RESET, GREEN+'-->', '['+str(it['status'])+']'+RESET)
+                print(clr.BOLD_WHITE+url+clr.RESET, clr.GREEN+'-->', '['+str(it['status'])+']'+clr.RESET)
             else:
-                print(FAINT_WHITE+url+RESET, GREY+'-->', '['+str(it['status'])+']'+RESET)
+                print(clr.FAINT_WHITE+url+clr.RESET, clr.GREY+'-->', '['+str(it['status'])+']'+clr.RESET)
             if args.verbose or args.evidence:
-                print('\t', GREY+'Evidence:', it['evidence']+RESET)
-                print('\t', GREY+'Regex:', it['regex']+RESET)
+                print('\t', clr.GREY+'Evidence:', it['evidence']+clr.RESET)
+                print('\t', clr.GREY+'Regex:', it['regex']+clr.RESET)
 
         print('\nIP ADDRESSES AND VERSION NUMBERS:\n====================')
         if args.verbose or args.evidence:
@@ -586,9 +589,9 @@ def main():
                 if ip_v:
                     #print(baseurl)
                     print('\n'.join([item for item in ip_v['ip_v']]))
-                    print('\t', GREY+baseurl+RESET)
-                    print('\t', GREY+ip_v['evidence']+RESET)
-                    print('\t', GREY+ip_v['regex']+RESET)
+                    print('\t', clr.GREY+baseurl+clr.RESET)
+                    print('\t', clr.GREY+ip_v['evidence']+clr.RESET)
+                    print('\t', clr.GREY+ip_v['regex']+clr.RESET)
         else:
             ip_vs = crawler.get_ip_v(as_dict=False)
             print('\n'.join([i for i in ip_vs]))
