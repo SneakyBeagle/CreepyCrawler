@@ -3,7 +3,7 @@
 
 ## Custom module includes
 from src.version import *
-from src.db import DB
+from src.cc_db import db
 from src.colours import clr
 from src.splash import splash
 from src.crawler import Crawler
@@ -40,14 +40,47 @@ def get_args():
     args = parser.parse_args()
     return args
 
+def get_domain(url):
+    if url.startswith('http://'):
+        domain = (url.split('http://')[1]).split('/')[0]
+    elif url.startswith('https://'):
+        domain = (url.split('https://')[1]).split('/')[0]
+    else:
+        domain = url.split('/')[0]
+    return domain
+
+def get_protocol(url):
+    if url.startswith('http://'):
+        protocol = 'http://'
+    elif url.startswith('https://'):
+        protocol = 'https://'
+    else:
+        protocol = 'https://'
+    return protocol
+
+def insert_links_into_db(target, protocol, urls_dict, internal=True):
+    for url,it in urls_dict.items():
+        evidence=it['evidence']
+        regex=' '#it['regex']
+        status=it['status']
+        if not(type(status)==int):
+            status=0
+        span=it['span']
+        origin=' '#it['baseurl']
+        length=it['length']
+        if internal:
+            db.insert_internal_link(target=target, protocol=protocol,
+                                    url=url, evidence=evidence, status=status,
+                                    regex=regex, origin=origin)
+        else:
+            db.insert_external_link(target=target, protocol=protocol,
+                                    url=url, evidence=evidence, status=status,
+                                    regex=regex, origin=origin)            
+
 def main():
     """
     Main function
     """
-    v='''
-    SneakyBeagle
-     v0.1 2021'''
-    
     print(splash.splash+'\n'+TAG+'\n')
 
     args=get_args()
@@ -60,8 +93,11 @@ def main():
         _print=True
 
     if args.database:
-        db=DB(db_name=args.database)
-
+        db.db_init(db_name=args.database)
+        db.set_target(domain=get_domain(url=args.url),
+                         protocol=get_protocol(url=args.url))
+        
+        
     if args.no_colours:
         clr.BOLD_WHITE=''
         clr.FAINT_WHITE=''
@@ -94,6 +130,14 @@ def main():
 
     crawler = Crawler(baseurl=args.url, depth=depth, exclude=args.exclude)
     crawler.run(url=args.url, verify=not(args.insecure), nr_threads=threads, timeout=timeout)
+
+    if args.database:
+        insert_links_into_db(target=get_domain(url=args.url),
+                             protocol=get_protocol(url=args.url),
+                             urls_dict=crawler.get_int_urls())
+        insert_links_into_db(target=get_domain(url=args.url),
+                             protocol=get_protocol(url=args.url),
+                             urls_dict=crawler.get_ext_urls(), internal=False)
 
     if _print:
         with open(fd, 'w') as f:

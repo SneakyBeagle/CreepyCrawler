@@ -1,3 +1,5 @@
+from src.patterns import *
+
 import sys
 import os
 import requests
@@ -17,31 +19,16 @@ class Crawler():
     protocol: str # Protocol as derived from the provided base url
 
     # Link patterns
-    links_patt = [
-        '^.*(?P<link>http[s]{0,1}\:\/\/[^\"^\,]+\.[^\"^\<^\>^\'^\,]+).*$', #general links
-        '^(.*(href|link|action|value|src|srcset)\=\"(?P<link>[^\"^\<^\>^\,]+)\".*)+$', # links in tags
-        '^(?P<link>\/.*\/)$', # links on robots.txt
-        '.*(?P<link>g.co/[^\^\<^\>"]*)$' # google specific link often embedded in text, not in tags
-    ]
+    links_patt = link_patterns[:]
 
     # email patterns
-    mail_patt = [
-        '[A-z][0-9A-z\-\_\.]+\@[0-9A-z\-\_\.]+\.[a-z]'
-    ]
+    mail_patt = mail_patterns[:]
 
     # IP addresses and version numbers
-    ip_v_patt = [
-        #'[A-z0-9\-\_]*\d[\d\.]+\.\d+', # Possible IPv4 adresses and version numbers
-        '([\d]{1,3}\.|\-|\_){3}[\d]{1,3}', # IPv4 adresses
-        #'[A-z]+\s|\=|\.|\-|\_v|V[\d]{,3}(\.[\d]{,3}){1,2}', # Versions with name in front
-        '[A-z]+[\s\=\.\-\_vV][\d]{1,3}(\.[\d]{1,3}){1,2}', # Versions with name in front
-        #'[A-z]+\s|\=|\.|\-|\_v|V[\d]{,3}(\.[\d]{,3}){1,2}' # Versions with name in front
-    ]
+    ip_v_patt = ip_patterns[:]
 
-    vers_patt = [
-        ''
-    ]
-    
+    # Version patterns
+    vers_patt = version_patterns[:]
 
     def __init__(self, baseurl, depth=1, exclude=None):
         """
@@ -281,18 +268,19 @@ class Crawler():
         if not baseurl in self.ip_v:
             self.ip_v[baseurl] = {}
 
+        self.ip_v[baseurl]['ip_v']=[]
         if not(type(text) == str):
             contents = []
             for head, cont in text.items():
                 for patt in self.ip_v_patt:
                     if re.findall(patt, cont):
-                        self.ip_v[baseurl]['ip_v'] = re.findall(patt, cont)
+                        self.ip_v[baseurl]['ip_v'] += re.findall(patt, cont)
                         self.ip_v[baseurl]['evidence'] = cont
                         self.ip_v[baseurl]['regex'] = patt
         else:
             for patt in self.ip_v_patt:
                 if re.findall(patt, text):
-                    self.ip_v[baseurl]['ip_v'] = re.findall(patt, text)
+                    self.ip_v[baseurl]['ip_v'] += re.findall(patt, text)
                     self.ip_v[baseurl]['evidence'] = text
                     self.ip_v[baseurl]['regex'] = patt
 
