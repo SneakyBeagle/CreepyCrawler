@@ -71,9 +71,15 @@ class Crawler():
             self.protocol = ''
             self.host = baseurl.split('/')[0]
 
-        print('PROTOCOL:', self.protocol)
-        print('HOST:', self.host)
+        #print('PROTOCOL:', self.protocol)
+        #print('HOST:', self.host)
 
+    def get_domain(self):
+        return self.host
+
+    def get_protocol(self):
+        return self.protocol
+        
     def run(self, url, verify=True, nr_threads=4, timeout=2):
         """
         Run creepycrawler on specified url.
