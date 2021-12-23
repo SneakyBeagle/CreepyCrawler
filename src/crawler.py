@@ -4,11 +4,11 @@ import sys
 import os
 import requests
 import re
+import time
 from urllib3.exceptions import InsecureRequestWarning
 from threading import Thread
 
 class Crawler():
-    external_urls: list # Found urls that link to external pages
     __urls: dict # Found urls with status codes, length, evidence and regex that found it
     visited_urls: dict # Urls that have been visited already
     crawling_urls: list # Urls that are currently being crawled
@@ -30,7 +30,7 @@ class Crawler():
     # Version patterns
     vers_patt = version_patterns[:]
 
-    def __init__(self, baseurl, depth=1, exclude=None):
+    def __init__(self, *args, baseurl, depth=1, exclude=None, **kwargs):
         """
         Initialise the Crawler by setting members. Also determines the hostname 
         and the used protocol.
@@ -47,32 +47,26 @@ class Crawler():
             If this parameter is provided, the crawler will compare this string to the
             found URLs. If there is a match, that URL will be excluded from further requests.
         """
-        self.external_urls = {}
-        self.__urls = {}
-        self.visited_urls = {}
-        self.crawling_urls = []
-        self.next_urls = []
-        self.emails = {}
-        self.ip_v = {}
-        self.depth=depth
-        self.exclude=exclude
+        self.__parse_kwargs(*args, depth, exclude, **kwargs)
         
-        if not(self.depth):
-            self.depth=1000000000
         self.term_width = os.get_terminal_size().columns
 
-        if baseurl.startswith('http://'):
-            self.protocol = 'http://'
-            self.host = (baseurl.split('http://')[1]).split('/')[0]
-        elif baseurl.startswith('https://'):
-            self.protocol = 'https://'
-            self.host = (baseurl.split('https://')[1]).split('/')[0]
-        else:
-            self.protocol = ''
-            self.host = baseurl.split('/')[0]
+        self.init_url(url=baseurl)
 
-        #print('PROTOCOL:', self.protocol)
-        #print('HOST:', self.host)
+    def init_url(self, url):
+        if url.startswith('http://'):
+            self.protocol = 'http://'
+            self.host = (url.split('http://')[1]).split('/')[0]
+        elif url.startswith('https://'):
+            self.protocol = 'https://'
+            self.host = (url.split('https://')[1]).split('/')[0]
+        else:
+            self.protocol = 'https://'
+            self.host = url.split('/')[0]
+        self.tld = self.host.split('.')[-1]
+        self.domain = self.host.split('.')[-2]
+        self.port = url.split(':')[-1]
+        
 
     def get_domain(self):
         return self.host
@@ -80,7 +74,7 @@ class Crawler():
     def get_protocol(self):
         return self.protocol
         
-    def run(self, url, verify=True, nr_threads=4, timeout=2):
+    def run(self, url, verify=True, nr_threads=4, timeout=2, user_agent=None):
         """
         Run creepycrawler on specified url.
         """
@@ -92,7 +86,8 @@ class Crawler():
         
         # Initial request
         print('Getting baseurl', url)
-        resp = self.get(url=url, verify=verify, printerror=True, timeout=self.timeout)
+        resp = self.get(url=url, verify=verify, printerror=True, timeout=self.timeout,
+                        user_agent=user_agent)
         if not(resp):
             print('[ERROR], cannot GET baseurl', url, '...')
             print('Exiting')
@@ -154,7 +149,8 @@ class Crawler():
                 string = 'Visiting: '+link
                 self.term_width = os.get_terminal_size().columns
                 print(string+((self.term_width-len(string))*' '), end='\r')
-                resp = self.get(url=link, verify=self.verify, timeout=self.timeout)
+                resp = self.get(url=link, verify=self.verify, timeout=self.timeout,
+                                user_agent=user_agent)
                 if resp:
                     self.__retrieve_links(html=resp, baseurl=link)
                     self.__retrieve_emailaddr(html=resp, baseurl=link)
@@ -163,29 +159,39 @@ class Crawler():
                 string = 'Visiting: '+link
                 self.term_width = os.get_terminal_size().columns
                 print(string+((self.term_width-len(string))*' '), end='\r')
-                resp = self.get(url=link, verify=self.verify, timeout=self.timeout)
+                resp = self.get(url=link, verify=self.verify, timeout=self.timeout,
+                                user_agent=user_agent)
                 if resp:
                     self.__retrieve_links(html=resp, baseurl=link)
                     self.__retrieve_emailaddr(html=resp, baseurl=link)
                     self.__retrieve_ip_v(text=resp, baseurl=link)
                 
 
-    def get(self, url, verify=True, printerror=False, timeout=2):
+    def get(self, url, verify=True, printerror=True, timeout=2, user_agent=None):
         '''
         Try GET request to URL and save the response in visited_urls.
         '''
+        headers=requests.utils.default_headers()
+        if user_agent:
+            headers.update({'User-Agent': user_agent})
         try:
             if not(url in self.visited_urls):
-                res = requests.get(url, verify=verify, timeout=timeout)
+                st=time.time()
+                res = requests.get(url, verify=verify, timeout=timeout, headers=headers)
+                end="%.4f"%(time.time()-st)
+                #print(res.status_code, str(end)+'s', url)
                 self.visited_urls[url] = {'html': res.text,
                                           'headers': res.headers,
                                           'status': res.status_code,
-                                          'length': len(res.text)}
+                                          'length': len(res.text),
+                                          'time': end}
                 if url in self.__urls:
-                    self.__urls[url]['status'] = res.status_code
-                    self.__urls[url]['length'] = len(res.text)
-                    self.__urls[url]['headers'] = res.headers
-                    self.__retrieve_ip_v(text=res.headers, baseurl=url+' (headers)')
+                    if str(self.__urls[url]['status']) != '200':
+                        self.__urls[url]['status'] = res.status_code
+                        self.__urls[url]['length'] = len(res.text)
+                        self.__urls[url]['headers'] = res.headers
+                        
+                self.__retrieve_ip_v(text=res.headers, baseurl=url+' (headers)')
 
                 return res.text
         except requests.exceptions.Timeout as e:
@@ -260,7 +266,8 @@ class Crawler():
     def is_subdomain(self, url):
         """
         """
-        return (self.host in url) and not(self.is_internal(url))
+        r = ((self.domain+'.'+self.tld) in url) and not(self.is_internal(url))
+        return r
 
     def is_external(self, url):
         """
@@ -347,13 +354,10 @@ class Crawler():
                             self.__urls[links[-1]]['baseurl']=baseurl
                     
 
-        self.external_urls[baseurl] = []
         links = self.__rm_dupl(links)
         for link in links:
             if self.is_internal(link) and not(link in self.visited_urls or link in self.crawling_urls):
                 self.next_urls.append(link)
-            else: # obsolete
-                self.external_urls[baseurl].append(link) # obsolete
 
         return links
 
@@ -367,3 +371,20 @@ class Crawler():
     
     def __rm_dupl(self, l):
         return list(dict.fromkeys(l))
+
+    def __parse_kwargs(self, *args, depth=1, exclude=None, **kwargs):
+        self.__urls = {}
+        self.visited_urls = {}
+        self.crawling_urls = []
+        self.next_urls = []
+        self.emails = {}
+        self.ip_v = {}
+        self.depth=depth
+        self.exclude=exclude
+        if 'timeout' in kwargs:
+            self.timeout=kwargs['timeout']
+        if 'user_agent' in kwargs:
+            self.user_agent=kwargs['user_agent']
+
+        if not(self.depth):
+            self.depth=1000000000

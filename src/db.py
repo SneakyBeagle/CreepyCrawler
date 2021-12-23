@@ -1,5 +1,6 @@
 import sqlite3
 import sys
+from threading import Lock
 
 class DB():
 
@@ -9,6 +10,7 @@ class DB():
         pass
 
     def _init(self, db_name):
+        self._lock=Lock()
         self.db_name=self.__init_name(name=db_name)
         try:
             self.conn=sqlite3.connect(self.db_name)
@@ -28,12 +30,13 @@ class DB():
         return name
         
     def query(self, query):
-        try:
-            cursor = self.conn.execute(query)
-        except Exception as e:
-            print('Could not execute query:', query, file=sys.stderr)
-            print('Error:', e, file=sys.stderr)
-            sys.exit(1)
+        with self._lock:
+            try:
+                cursor = self.conn.execute(query)
+            except Exception as e:
+                print('Could not execute query:', query, file=sys.stderr)
+                print('Error:', e, file=sys.stderr)
+                sys.exit(1)
 
         return cursor
 
@@ -41,7 +44,7 @@ class DB():
                      column_types: list, pk_index:int=0,
                      notnull:list=[0]):
         if not(len(column_types)==len(column_names)):
-            raise ValueError
+            raise ValueError("Different number of column types and column names")
         
         query='CREATE TABLE '+table_name+' ('
 
@@ -62,7 +65,7 @@ class DB():
 
     def insert(self, table_name: str, column_names: list, values: list):
         if not(len(column_names)==len(values)):
-            raise ValueError
+            raise ValueError("Different number of column names and values")
 
         query='INSERT INTO '+table_name+' ('+', '.join(column_names)+')' \
             +' VALUES ('+', '.join(values)+');'
@@ -105,6 +108,12 @@ class DB():
         query="PRAGMA table_info('"+table_name+"');"
         res=self.query(query=query)
         return res
+
+    def clean(self, string):
+        repl={"'":" "}
+        for k,v in repl.items():
+            string=string.replace(k,v)
+        return string
 
 if __name__=='__main__':
     db = DB(db_name='test.db')
