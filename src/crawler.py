@@ -73,6 +73,26 @@ class Crawler():
 
     def get_protocol(self):
         return self.protocol
+
+    def run_single(self, url, verify=True, timeout=2, user_agent=None):
+        # Set some members
+        self.verify=verify
+        self.timeout=timeout
+
+        url=self.prepare_url(url=url)
+        
+        # Request
+        print('Getting url', url)
+        resp = self.get(url=url, verify=verify, printerror=True, timeout=self.timeout,
+                        user_agent=user_agent)
+        if not(resp):
+            print('[ERROR], cannot GET baseurl', url, '...')
+            print('Exiting')
+            sys.exit(1)
+        print('Retrieving links')
+        self.__retrieve_links(html=resp, baseurl=url)
+        print('Retrieving emails')
+        self.__retrieve_emailaddr(html=resp, baseurl=url)        
         
     def run(self, url, verify=True, nr_threads=4, timeout=2, user_agent=None):
         """

@@ -132,7 +132,7 @@ class Buster():
         if nr > len(wordlist):
             return [wordlist]
         nr_words = len(wordlist)//nr
-        print(len(wordlist), nr_words, nr, nr*nr_words)
+        #print(len(wordlist), nr_words, nr, nr*nr_words)
         div = []
         for i in range(nr):
             start=i*nr_words

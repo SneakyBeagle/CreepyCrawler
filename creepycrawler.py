@@ -17,8 +17,7 @@ import argparse
 def crawl(args):
     """
     Crawl function
-    """
-    
+    """    
     if args.output_file:
         #args.no_colours = True
         # Write to csv file
@@ -122,8 +121,41 @@ def dir_bust(args):
         buster.run(url=args.url, verify=not(args.insecure), nr_threads=threads,
                    timeout=timeout)
 
+def single(args):
+    """
+    """
+    if args.no_colours:
+        clr.no_colours()
+
+    if args.insecure:
+        requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
+
+    if args.timeout:
+        timeout=args.timeout
+    else:
+        timeout=10
+
+    crawler = Crawler(baseurl=args.url, exclude=args.exclude)
+    if args.user_agent:
+        crawler.run_single(url=args.url, verify=not(args.insecure),
+                    timeout=timeout, user_agent=args.user_agent)
+    else:
+        crawler.run_single(url=args.url, verify=not(args.insecure),
+                    timeout=timeout)
+
+    if args.database:
+        insert_links_into_db(target=get_domain(url=args.url),
+                             protocol=get_protocol(url=args.url),
+                             urls_dict=crawler.get_int_urls())
+        insert_links_into_db(target=get_domain(url=args.url),
+                             protocol=get_protocol(url=args.url),
+                             urls_dict=crawler.get_ext_urls(), internal=False)
+
+    print_results(crawler=crawler, args=args)
+
+
 def auto(args):
-    pass
+    print("NOT IMPLEMENTED YET")
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -141,7 +173,7 @@ def parse_args():
                               help='Maximum number of threads to run simultaneously (default is 100)',
                               type=int)
     crawl_parser.add_argument('--timeout',
-                              help='Timeout for requests, default is 10s',
+                              help='Timeout for requests, default is 2s',
                               type=int)
     crawl_parser.add_argument('-k', '--insecure', help='Allow insecure connections when using SSL',
                               action='store_true')
@@ -167,7 +199,7 @@ def parse_args():
                             help='Maximum number of threads to run simultaneously (default is 100)',
                             type=int)
     dir_parser.add_argument('--timeout',
-                            help='Timeout for requests, default is 10s',
+                            help='Timeout for requests, default is 2s',
                             type=int)
     dir_parser.add_argument('-k', '--insecure', help='Allow insecure connections when using SSL',
                             action='store_true')
@@ -181,6 +213,26 @@ def parse_args():
     dir_parser.add_argument('-w', '--wordlist', help='Wordlist to use for dirbusting')
     dir_parser.add_argument('--user-agent', help='Specify user agent')
     dir_parser.set_defaults(func=dir_bust)
+
+    # SINGLE PAGE PARSER #
+    single_parser = subparsers.add_parser('single', help='Scan single page for interesting info. (Not implemented)')
+    single_parser.add_argument('-u', '--url',
+                             help='The base URL to start crawling from',
+                             required=True)
+    single_parser.add_argument('--timeout',
+                              help='Timeout for requests, default is 10s',
+                              type=int)
+    single_parser.add_argument('-k', '--insecure', help='Allow insecure connections when using SSL',
+                              action='store_true')
+    single_parser.add_argument('--evidence', help='Print evidence',
+                              action='store_true')
+    single_parser.add_argument('-o', '--output-file', help='File to write the output into')
+    single_parser.add_argument('-db', '--database', help='Database to write the output into')
+    single_parser.add_argument('--no-colours', help='No colours',
+                              action='store_true')
+    single_parser.add_argument('--exclude', help='Exclude URLs that include this string')
+    single_parser.add_argument('--user-agent', help='Specify user agent')
+    single_parser.set_defaults(func=single)
 
     # AUTOMATED PARSER #
     auto_parser = subparsers.add_parser('auto', help='Automated mode. (Not implemented)')
