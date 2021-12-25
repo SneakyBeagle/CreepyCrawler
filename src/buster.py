@@ -37,6 +37,8 @@ class Buster():
 
     def run(self, url, verify=True, nr_threads=4, timeout=2,
             user_agent=None, bad_code='404'):
+
+        url = self.prepare_url(url)
         self.term_width = os.get_terminal_size().columns
         try:
             lists = self.__divide_list(wordlist=self.wordlist, nr=nr_threads)
@@ -54,6 +56,9 @@ class Buster():
         for i,t in enumerate(threads):
             print('Joining thread', i)
             t.join()
+
+        self.term_width = os.get_terminal_size().columns
+        print(' '*self.term_width)
 
     def run_thread(self, url, wordlist, verify=True, timeout=2, user_agent=None, bad_code='404'):
         #print('thread started')
