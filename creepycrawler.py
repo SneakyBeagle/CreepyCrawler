@@ -340,8 +340,22 @@ def print_results(crawler, args):
                 print('\t', clr.GREY+ip_v['evidence']+clr.RESET)
                 print('\t', clr.GREY+ip_v['regex']+clr.RESET)
     else:
-        ip_vs = crawler.get_ip_v(as_dict=False)
-        print('\n'.join([i for i in ip_vs]))    
+        ips = crawler.get_ips(as_dict=False)
+        print('\n'.join([i for i in ips]))    
+
+    print('\nVERSION NUMBERS:\n====================')
+    if args.evidence:
+        urls = crawler.get_versions()
+        for baseurl, version in urls.items():
+            if version:
+                #print(baseurl)
+                print('\n'.join([item for item in version['versions']]))
+                print('\t', clr.GREY+baseurl+clr.RESET)
+                print('\t', clr.GREY+version_v['evidence']+clr.RESET)
+                print('\t', clr.GREY+version_v['regex']+clr.RESET)
+    else:
+        versions = crawler.get_versions(as_dict=False)
+        print('\n'.join([i for i in versions]))
             
 def main():
     """

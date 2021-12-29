@@ -14,7 +14,9 @@ class Crawler():
     crawling_urls: list # Urls that are currently being crawled
     next_urls: list # Next urls in line to visit
     emails: list # Found email adresses
-    ip_v: dict
+    ips: dict
+    versions: dict
+    names: dict
     host: str # Host as derived from the provided base url
     protocol: str # Protocol as derived from the provided base url
 
@@ -25,10 +27,13 @@ class Crawler():
     mail_patt = mail_patterns[:]
 
     # IP addresses and version numbers
-    ip_v_patt = ip_patterns[:]
+    ips_patt = ip_patterns[:]
 
     # Version patterns
     vers_patt = version_patterns[:]
+
+    # Name patterns
+    names_patt = name_patterns[:]
 
     def __init__(self, *args, baseurl, depth=1, exclude=None, **kwargs):
         """
@@ -54,6 +59,14 @@ class Crawler():
         self.init_url(url=baseurl)
 
     def init_url(self, url):
+        """
+        Initialise the url, set the host, protocol, tld, domain and port
+
+        Parameters
+        ----------
+        url: str
+            The url to use for initialisation
+        """
         if url.startswith('http://'):
             self.protocol = 'http://'
             self.host = (url.split('http://')[1]).split('/')[0]
@@ -66,15 +79,57 @@ class Crawler():
         self.tld = self.host.split('.')[-1]
         self.domain = self.host.split('.')[-2]
         self.port = url.split(':')[-1]
-        
 
-    def get_domain(self):
+        if not self.port:
+            if self.protocol=='https://':
+                self.port='443'
+            else:
+                self.port='80'
+
+    def get_host(self):
+        """
+        Get the host
+
+        Returns
+        -------
+        self.host: str
+            The host in format -> domain.tld
+        """
         return self.host
 
+    def get_domain(self):
+        """
+        Get the domain, without tld
+
+        Returns
+        -------
+        self.domain: str
+            The domain without tld
+        """
+        return self.domain
+
     def get_protocol(self):
+        """
+        Get the protocol (http:// or https://)
+
+        Returns
+        -------
+        self.protocol: str
+            http:// or https://
+        """
         return self.protocol
 
     def run_single(self, url, verify=True, timeout=2, user_agent=None):
+        """
+        Run the crawler on a single url to analyse it for sensitive information
+
+        Parameters
+        ----------
+        url: str
+        verify: bool
+        timeout: int
+        user_agent: str
+        """
         # Set some members
         self.verify=verify
         self.timeout=timeout
@@ -97,6 +152,14 @@ class Crawler():
     def run(self, url, verify=True, nr_threads=4, timeout=2, user_agent=None):
         """
         Run creepycrawler on specified url.
+
+        Parameters
+        ----------
+        url: str
+        verify: bool
+        nr_threads: int
+        timeout: int
+        user_agent: str
         """
         # Set some members
         self.verify=verify
@@ -146,7 +209,8 @@ class Crawler():
                     if div==(nr_running-1):
                         end=nr_links
                     crawl_urls=self.crawling_urls[start:end]
-                    threads.append(Thread(target=self.__visit_next_urls, args=(crawl_urls,)))
+                    threads.append(Thread(target=self.__visit_next_urls, args=(crawl_urls,
+                                                                               user_agent,)))
                     threads[-1].start()
 
                 for thread in threads:
@@ -163,7 +227,7 @@ class Crawler():
                 
         print('\nVisited', len(self.visited_urls))
 
-    def __visit_next_urls(self, crawl_urls):
+    def __visit_next_urls(self, crawl_urls, user_agent):
         for link in crawl_urls:
             if self.exclude and not(self.exclude in link):
                 string = 'Visiting: '+link
@@ -172,9 +236,11 @@ class Crawler():
                 resp = self.get(url=link, verify=self.verify, timeout=self.timeout,
                                 user_agent=user_agent)
                 if resp:
-                    self.__retrieve_links(html=resp, baseurl=link)
-                    self.__retrieve_emailaddr(html=resp, baseurl=link)
-                    self.__retrieve_ip_v(text=resp, baseurl=link)
+                    self.__retrieve(resp=resp, baseurl=link)
+                    #self.__retrieve_links(html=resp, baseurl=link)
+                    #self.__retrieve_emailaddr(html=resp, baseurl=link)
+                    #self.__retrieve_ips(text=resp, baseurl=link)
+                    #self.__retrieve_versions(text=resp, baseurl=link)
             elif not(self.exclude):
                 string = 'Visiting: '+link
                 self.term_width = os.get_terminal_size().columns
@@ -182,9 +248,11 @@ class Crawler():
                 resp = self.get(url=link, verify=self.verify, timeout=self.timeout,
                                 user_agent=user_agent)
                 if resp:
-                    self.__retrieve_links(html=resp, baseurl=link)
-                    self.__retrieve_emailaddr(html=resp, baseurl=link)
-                    self.__retrieve_ip_v(text=resp, baseurl=link)
+                    self.__retrieve(resp=resp, baseurl=link)
+                    #self.__retrieve_links(html=resp, baseurl=link)
+                    #self.__retrieve_emailaddr(html=resp, baseurl=link)
+                    #self.__retrieve_ips(text=resp, baseurl=link)
+                    #self.__retrieve_versions(text=resp, baseurl=link)
                 
 
     def get(self, url, verify=True, printerror=True, timeout=2, user_agent=None):
@@ -199,7 +267,6 @@ class Crawler():
                 st=time.time()
                 res = requests.get(url, verify=verify, timeout=timeout, headers=headers)
                 end="%.4f"%(time.time()-st)
-                #print(res.status_code, str(end)+'s', url)
                 self.visited_urls[url] = {'html': res.text,
                                           'headers': res.headers,
                                           'status': res.status_code,
@@ -211,7 +278,8 @@ class Crawler():
                         self.__urls[url]['length'] = len(res.text)
                         self.__urls[url]['headers'] = res.headers
                         
-                self.__retrieve_ip_v(text=res.headers, baseurl=url+' (headers)')
+                self.__retrieve_ips(text=res.headers, baseurl=url+' (headers)')
+                self.__retrieve_versions(text=res.headers, baseurl=url+' (headers)')
 
                 return res.text
         except requests.exceptions.Timeout as e:
@@ -267,15 +335,25 @@ class Crawler():
                     mails+=item
             return self.__rm_dupl(mails)
 
-    def get_ip_v(self, as_dict=True):
+    def get_ips(self, as_dict=True):
         if as_dict:
-            return self.ip_v
+            return self.ips
         else:
-            ip_v = []
-            for url,item in self.ip_v.items():
+            ips = []
+            for url,item in self.ips.items():
                 if item:
-                    ip_v+=item['ip_v']
-            return self.__rm_dupl(ip_v)
+                    ips+=item['ips']
+            return self.__rm_dupl(ips)
+
+    def get_versions(self, as_dict=True):
+        if as_dict:
+            return self.versions
+        else:
+            versions = []
+            for url,item in self.versions.items():
+                if item:
+                    versions+=item['versions']
+            return self.__rm_dupl(versions)
 
     def is_internal(self, url):
         """
@@ -294,31 +372,91 @@ class Crawler():
         """
         return not(self.is_internal(url) or self.is_subdomain(url))
 
-    def __retrieve_ip_v(self, text, baseurl):
+    def __retrieve(self, resp, baseurl):
         """
-        Retrieve IP addresses and version numbers based on regular expressions
         """
-        if not baseurl in self.ip_v:
-            self.ip_v[baseurl] = {}
+        self.__retrieve_links(html=resp, baseurl=baseurl)
+        self.__retrieve_emailaddr(html=resp, baseurl=baseurl)
+        self.__retrieve_ips(text=resp, baseurl=baseurl)
+        self.__retrieve_versions(text=resp, baseurl=baseurl)
 
-        self.ip_v[baseurl]['ip_v']=[]
+    def __retrieve_ips(self, text, baseurl):
+        """
+        Retrieve IP addresses based on regular expressions
+        """
+        if not baseurl in self.ips:
+            self.ips[baseurl] = {}
+
+        self.ips[baseurl]['ips']=[]
         if not(type(text) == str):
             contents = []
             for head, cont in text.items():
-                for patt in self.ip_v_patt:
+                for patt in self.ips_patt:
                     if re.findall(patt, cont):
-                        self.ip_v[baseurl]['ip_v'] += re.findall(patt, cont)
-                        self.ip_v[baseurl]['evidence'] = cont
-                        self.ip_v[baseurl]['regex'] = patt
+                        self.ips[baseurl]['ips'] += re.findall(patt, cont)
+                        self.ips[baseurl]['evidence'] = cont
+                        self.ips[baseurl]['regex'] = patt
         else:
-            for patt in self.ip_v_patt:
+            for patt in self.ips_patt:
                 if re.findall(patt, text):
-                    self.ip_v[baseurl]['ip_v'] += re.findall(patt, text)
-                    self.ip_v[baseurl]['evidence'] = text
-                    self.ip_v[baseurl]['regex'] = patt
+                    self.ips[baseurl]['ips'] += re.findall(patt, text)
+                    self.ips[baseurl]['evidence'] = text
+                    self.ips[baseurl]['regex'] = patt
 
-        if 'ip_v' in self.ip_v[baseurl]:
-            self.ip_v[baseurl]['ip_v'] = self.__rm_dupl(self.ip_v[baseurl]['ip_v'])
+        if 'ips' in self.ips[baseurl]:
+            self.ips[baseurl]['ips'] = self.__rm_dupl(self.ips[baseurl]['ips'])
+
+    def __retrieve_versions(self, text, baseurl):
+        """
+        Retrieve version numbers based on regular expressions
+        """
+        if not baseurl in self.versions:
+            self.versions[baseurl] = {}
+
+        self.versions[baseurl]['versions']=[]
+        if not(type(text) == str):
+            contents = []
+            for head, cont in text.items():
+                for patt in self.vers_patt:
+                    if re.findall(patt, cont):
+                        self.versions[baseurl]['versions'] += re.findall(patt, cont)
+                        self.versions[baseurl]['evidence'] = cont
+                        self.versions[baseurl]['regex'] = patt
+        else:
+            for patt in self.vers_patt:
+                if re.findall(patt, text):
+                    self.versions[baseurl]['versions'] += re.findall(patt, text)
+                    self.versions[baseurl]['evidence'] = text
+                    self.versions[baseurl]['regex'] = patt
+
+        if 'versions' in self.versions[baseurl]:
+            self.versions[baseurl]['versions'] = self.__rm_dupl(self.versions[baseurl]['versions'])
+
+    def __retrieve_names(self, text, baseurl):
+        """
+        Retrieve NAME addresses based on regular expressions
+        """
+        if not baseurl in self.names:
+            self.names[baseurl] = {}
+
+        self.names[baseurl]['names']=[]
+        if not(type(text) == str):
+            contents = []
+            for head, cont in text.items():
+                for patt in self.names_patt:
+                    if re.findall(patt, cont):
+                        self.names[baseurl]['names'] += re.findall(patt, cont)
+                        self.names[baseurl]['evidence'] = cont
+                        self.names[baseurl]['regex'] = patt
+        else:
+            for patt in self.names_patt:
+                if re.findall(patt, text):
+                    self.names[baseurl]['names'] += re.findall(patt, text)
+                    self.names[baseurl]['evidence'] = text
+                    self.names[baseurl]['regex'] = patt
+
+        if 'names' in self.names[baseurl]:
+            self.names[baseurl]['names'] = self.__rm_dupl(self.names[baseurl]['names'])
 
     def __retrieve_emailaddr(self, html, baseurl):
         """
@@ -398,7 +536,8 @@ class Crawler():
         self.crawling_urls = []
         self.next_urls = []
         self.emails = {}
-        self.ip_v = {}
+        self.ips = {}
+        self.versions = {}
         self.depth=depth
         self.exclude=exclude
         if 'timeout' in kwargs:
