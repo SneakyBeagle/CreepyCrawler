@@ -16,7 +16,7 @@ class Crawler():
     emails: list # Found email adresses
     ips: dict
     versions: dict
-    names: dict
+    strings: dict
     host: str # Host as derived from the provided base url
     protocol: str # Protocol as derived from the provided base url
 
@@ -24,7 +24,7 @@ class Crawler():
     links_patt = link_patterns[:]
 
     # email patterns
-    mail_patt = mail_patterns[:]
+    emails_patt = mail_patterns[:]
 
     # IP addresses and version numbers
     ips_patt = ip_patterns[:]
@@ -32,8 +32,8 @@ class Crawler():
     # Version patterns
     vers_patt = version_patterns[:]
 
-    # Name patterns
-    names_patt = name_patterns[:]
+    # String patterns
+    strings_patt = string_patterns[:]
 
     def __init__(self, *args, baseurl, depth=1, exclude=None, **kwargs):
         """
@@ -45,7 +45,7 @@ class Crawler():
         baseurl: str
             The url to start crawling from (currently only supports the root web dir).
         dept: int (default = 1)
-            The depth to crawl. It is recommended to keep this low, as otherwise it will 
+            The depth to crawl. It is recommended to keep this low, as otherwise it can 
             all take a long long time to complete. Sets to a very high number if 0 is provided,
             essentially crawling until there are no more links to follow.
         exclude: str (default = None)
@@ -138,16 +138,13 @@ class Crawler():
         
         # Request
         print('Getting url', url)
-        resp = self.get(url=url, verify=verify, printerror=True, timeout=self.timeout,
+        resp = self.get(url=url, verify=verify, printwarning=False, timeout=self.timeout,
                         user_agent=user_agent)
         if not(resp):
             print('[ERROR], cannot GET baseurl', url, '...')
             print('Exiting')
             sys.exit(1)
-        print('Retrieving links')
-        self.__retrieve_links(html=resp, baseurl=url)
-        print('Retrieving emails')
-        self.__retrieve_emailaddr(html=resp, baseurl=url)        
+        self.__retrieve(resp=resp, baseurl=url)
         
     def run(self, url, verify=True, nr_threads=4, timeout=2, user_agent=None):
         """
@@ -169,16 +166,13 @@ class Crawler():
         
         # Initial request
         print('Getting baseurl', url)
-        resp = self.get(url=url, verify=verify, printerror=True, timeout=self.timeout,
+        resp = self.get(url=url, verify=verify, printwarning=False, timeout=self.timeout,
                         user_agent=user_agent)
         if not(resp):
             print('[ERROR], cannot GET baseurl', url, '...')
             print('Exiting')
             sys.exit(1)
-        print('Retrieving links')
-        self.__retrieve_links(html=resp, baseurl=url)
-        print('Retrieving emails')
-        self.__retrieve_emailaddr(html=resp, baseurl=url)
+        self.__retrieve(resp=resp, baseurl=url)
 
         threads=[]
 
@@ -237,10 +231,7 @@ class Crawler():
                                 user_agent=user_agent)
                 if resp:
                     self.__retrieve(resp=resp, baseurl=link)
-                    #self.__retrieve_links(html=resp, baseurl=link)
-                    #self.__retrieve_emailaddr(html=resp, baseurl=link)
-                    #self.__retrieve_ips(text=resp, baseurl=link)
-                    #self.__retrieve_versions(text=resp, baseurl=link)
+
             elif not(self.exclude):
                 string = 'Visiting: '+link
                 self.term_width = os.get_terminal_size().columns
@@ -249,13 +240,10 @@ class Crawler():
                                 user_agent=user_agent)
                 if resp:
                     self.__retrieve(resp=resp, baseurl=link)
-                    #self.__retrieve_links(html=resp, baseurl=link)
-                    #self.__retrieve_emailaddr(html=resp, baseurl=link)
-                    #self.__retrieve_ips(text=resp, baseurl=link)
-                    #self.__retrieve_versions(text=resp, baseurl=link)
+
                 
 
-    def get(self, url, verify=True, printerror=True, timeout=2, user_agent=None):
+    def get(self, url, verify=True, printwarning=True, timeout=2, user_agent=None):
         '''
         Try GET request to URL and save the response in visited_urls.
         '''
@@ -283,7 +271,7 @@ class Crawler():
 
                 return res.text
         except requests.exceptions.Timeout as e:
-            if printerror:
+            if printwarning:
                 print('[Warning], could not do GET request to', url, '->', e, file=sys.stderr)
         except Exception as e:
             print('[ERROR], could not do GET request to', url, '->', e, file=sys.stderr)
@@ -326,34 +314,30 @@ class Crawler():
         return subdom_url
 
     def get_emails(self, as_dict=True):
-        if as_dict:
-            return self.emails
-        else:
-            mails = []
-            for url,item in self.emails.items():
-                if item:
-                    mails+=item
-            return self.__rm_dupl(mails)
+        return self.__get_member(member=self.emails, as_dict=as_dict,
+                                 item='emails')
 
     def get_ips(self, as_dict=True):
-        if as_dict:
-            return self.ips
-        else:
-            ips = []
-            for url,item in self.ips.items():
-                if item:
-                    ips+=item['ips']
-            return self.__rm_dupl(ips)
+        return self.__get_member(member=self.ips, as_dict=as_dict,
+                               item='ips')
 
     def get_versions(self, as_dict=True):
-        if as_dict:
-            return self.versions
+        return self.__get_member(member=self.versions, as_dict=as_dict,
+                               item='versions')
+
+    def get_strings(self, as_dict=True):
+        return self.__get_member(member=self.strings, as_dict=as_dict,
+                               item='strings')
+
+    def __get_member(self, member, as_dict=True, item=''):
+        if as_dict and type(member)==dict:
+            return member
         else:
-            versions = []
-            for url,item in self.versions.items():
-                if item:
-                    versions+=item['versions']
-            return self.__rm_dupl(versions)
+            items = []
+            for url,it in member.items():
+                if it:
+                    items+=it[item]
+            return self.__rm_dupl(items)
 
     def is_internal(self, url):
         """
@@ -376,9 +360,10 @@ class Crawler():
         """
         """
         self.__retrieve_links(html=resp, baseurl=baseurl)
-        self.__retrieve_emailaddr(html=resp, baseurl=baseurl)
+        self.__retrieve_emailaddr(text=resp, baseurl=baseurl)
         self.__retrieve_ips(text=resp, baseurl=baseurl)
         self.__retrieve_versions(text=resp, baseurl=baseurl)
+        self.__retrieve_strings(text=resp, baseurl=baseurl)
 
     def __retrieve_ips(self, text, baseurl):
         """
@@ -387,21 +372,36 @@ class Crawler():
         if not baseurl in self.ips:
             self.ips[baseurl] = {}
 
-        self.ips[baseurl]['ips']=[]
         if not(type(text) == str):
             contents = []
             for head, cont in text.items():
                 for patt in self.ips_patt:
-                    if re.findall(patt, cont):
-                        self.ips[baseurl]['ips'] += re.findall(patt, cont)
-                        self.ips[baseurl]['evidence'] = cont
-                        self.ips[baseurl]['regex'] = patt
+                    match = re.findall(patt, cont)
+                    if match:
+                        if not('ips' in self.ips[baseurl]):
+                            self.ips[baseurl]['ips']=[]
+                            self.ips[baseurl]['evidence']=[]
+                            self.ips[baseurl]['regex']=[]
+                        match = self.__rm_dupl(match)
+                        self.ips[baseurl]['ips'] += match
+                        evidence = [self.__get_evidence(match=m,
+                                                        text=text) for m in match]
+                        self.ips[baseurl]['evidence'] += evidence
+                        self.ips[baseurl]['regex'] += [patt for m in match]
         else:
             for patt in self.ips_patt:
-                if re.findall(patt, text):
-                    self.ips[baseurl]['ips'] += re.findall(patt, text)
-                    self.ips[baseurl]['evidence'] = text
-                    self.ips[baseurl]['regex'] = patt
+                match = re.findall(patt, text)
+                if match:
+                    if not('ips' in self.ips[baseurl]):
+                        self.ips[baseurl]['ips']=[]
+                        self.ips[baseurl]['evidence']=[]
+                        self.ips[baseurl]['regex']=[]
+                    match = self.__rm_dupl(match)
+                    self.ips[baseurl]['ips'] += match
+                    evidence = [self.__get_evidence(match=m,
+                                                    text=text) for m in match]
+                    self.ips[baseurl]['evidence'] += evidence
+                    self.ips[baseurl]['regex'] += [patt for m in match]
 
         if 'ips' in self.ips[baseurl]:
             self.ips[baseurl]['ips'] = self.__rm_dupl(self.ips[baseurl]['ips'])
@@ -413,60 +413,125 @@ class Crawler():
         if not baseurl in self.versions:
             self.versions[baseurl] = {}
 
-        self.versions[baseurl]['versions']=[]
         if not(type(text) == str):
             contents = []
             for head, cont in text.items():
                 for patt in self.vers_patt:
-                    if re.findall(patt, cont):
-                        self.versions[baseurl]['versions'] += re.findall(patt, cont)
-                        self.versions[baseurl]['evidence'] = cont
-                        self.versions[baseurl]['regex'] = patt
+                    match = re.findall(patt, cont)
+                    if match:
+                        if not('versions' in self.versions[baseurl]):
+                            self.versions[baseurl]['versions']=[]
+                            self.versions[baseurl]['evidence']=[]
+                            self.versions[baseurl]['regex']=[]
+                        match = self.__rm_dupl(match)
+                        self.versions[baseurl]['versions'] += match
+                        evidence = [self.__get_evidence(match=m,
+                                                        text=text) for m in match]
+                        self.versions[baseurl]['evidence'] += evidence
+                        self.versions[baseurl]['regex'] += [patt for m in match]
         else:
             for patt in self.vers_patt:
-                if re.findall(patt, text):
-                    self.versions[baseurl]['versions'] += re.findall(patt, text)
-                    self.versions[baseurl]['evidence'] = text
-                    self.versions[baseurl]['regex'] = patt
+                match = re.findall(patt, text)
+                if match:
+                    if not('versions' in self.versions[baseurl]):
+                        self.versions[baseurl]['versions']=[]
+                        self.versions[baseurl]['evidence']=[]
+                        self.versions[baseurl]['regex']=[]
+                    match = self.__rm_dupl(match)
+                    self.versions[baseurl]['versions'] += match
+                    evidence = [self.__get_evidence(match=m,
+                                                    text=text) for m in match]
+                    self.versions[baseurl]['evidence'] += evidence
+                    self.versions[baseurl]['regex'] += [patt for m in match]
 
+        
         if 'versions' in self.versions[baseurl]:
             self.versions[baseurl]['versions'] = self.__rm_dupl(self.versions[baseurl]['versions'])
 
-    def __retrieve_names(self, text, baseurl):
+    def __retrieve_strings(self, text, baseurl):
         """
-        Retrieve NAME addresses based on regular expressions
+        Retrieve name-like strings based on regular expressions
         """
-        if not baseurl in self.names:
-            self.names[baseurl] = {}
+        if not baseurl in self.strings:
+            self.strings[baseurl] = {}
 
-        self.names[baseurl]['names']=[]
         if not(type(text) == str):
             contents = []
             for head, cont in text.items():
-                for patt in self.names_patt:
-                    if re.findall(patt, cont):
-                        self.names[baseurl]['names'] += re.findall(patt, cont)
-                        self.names[baseurl]['evidence'] = cont
-                        self.names[baseurl]['regex'] = patt
+                for patt in self.strings_patt:
+                    match = re.findall(patt, cont)
+                    if match:
+                        if not('strings' in self.strings[baseurl]):
+                            self.strings[baseurl]['strings']=[]
+                            self.strings[baseurl]['evidence']=[]
+                            self.strings[baseurl]['regex']=[]
+                        match = self.__rm_dupl(match)
+                        self.strings[baseurl]['strings'] += match
+                        evidence = [self.__get_evidence(match=m,
+                                                        text=text) for m in match]
+                        self.strings[baseurl]['evidence'] += evidence
+                        self.strings[baseurl]['regex'] += [patt for m in match]
         else:
-            for patt in self.names_patt:
-                if re.findall(patt, text):
-                    self.names[baseurl]['names'] += re.findall(patt, text)
-                    self.names[baseurl]['evidence'] = text
-                    self.names[baseurl]['regex'] = patt
+            for patt in self.strings_patt:
+                match = re.findall(patt, text)
+                if match:
+                    if not('strings' in self.strings[baseurl]):
+                        self.strings[baseurl]['strings']=[]
+                        self.strings[baseurl]['evidence']=[]
+                        self.strings[baseurl]['regex']=[]
+                    match = self.__rm_dupl(match)
+                    self.strings[baseurl]['strings'] += match
+                    evidence = [self.__get_evidence(match=m,
+                                                    text=text) for m in match]
+                    self.strings[baseurl]['evidence'] += evidence
+                    self.strings[baseurl]['regex'] += [patt for m in match]
 
-        if 'names' in self.names[baseurl]:
-            self.names[baseurl]['names'] = self.__rm_dupl(self.names[baseurl]['names'])
+        
+        if 'strings' in self.strings[baseurl]:
+            self.strings[baseurl]['strings'] = self.__rm_dupl(self.strings[baseurl]['strings'])
 
-    def __retrieve_emailaddr(self, html, baseurl):
+    def __retrieve_emailaddr(self, text, baseurl):
         """
-        Retrieve email addresses from HTML based on regular expressions
+        Retrieve email addresses based on regular expressions
         """
-        for mail_patt in self.mail_patt:
-            self.emails[baseurl] = re.findall(mail_patt, html)
+        if not baseurl in self.emails:
+            self.emails[baseurl] = {}
 
-        self.emails[baseurl] = self.__rm_dupl(self.emails[baseurl])
+        if not(type(text) == str):
+            contents = []
+            for head, cont in text.items():
+                for patt in self.emails_patt:
+                    match = re.findall(patt, cont)
+                    if match:
+                        if not('emails' in self.emails[baseurl]):
+                            self.emails[baseurl]['emails']=[]
+                            self.emails[baseurl]['evidence']=[]
+                            self.emails[baseurl]['regex']=[]
+                        match = self.__rm_dupl(match)
+                        self.emails[baseurl]['emails'] += match
+                        evidence = [self.__get_evidence(match=m,
+                                                        text=text) for m in match]
+                        self.emails[baseurl]['evidence'] += evidence
+                        self.emails[baseurl]['regex'] += [patt for m in match]
+        else:
+            for patt in self.emails_patt:
+                match = re.findall(patt, text)
+                if match:
+                    if not('emails' in self.emails[baseurl]):
+                        self.emails[baseurl]['emails']=[]
+                        self.emails[baseurl]['evidence']=[]
+                        self.emails[baseurl]['regex']=[]
+                    match = self.__rm_dupl(match)
+                    self.emails[baseurl]['emails'] += match
+                    evidence = [self.__get_evidence(match=m,
+                                                    text=text) for m in match]
+                    self.emails[baseurl]['evidence'] += evidence
+                    self.emails[baseurl]['regex'] += [patt for m in match]
 
+        
+        if 'emails' in self.emails[baseurl]:
+            self.emails[baseurl]['emails'] = self.__rm_dupl(self.emails[baseurl]['emails'])
+        
     def __retrieve_links(self, html, baseurl):
         """
         Retrieve links from HTML based on regular expressions.
@@ -489,8 +554,8 @@ class Crawler():
                     match = re.search(patt, line)
                     
                     if match:
-                        evidence = match.string 
-                        span = match.span() 
+                        evidence = self.__get_evidence(match=match)
+                        span = match.start('link'), match.end('link')
                         if match['link'].startswith('http://') or match['link'].startswith('https://'):
                             links.append(match['link'])
                         else:
@@ -520,14 +585,77 @@ class Crawler():
         return links
 
     def prepare_url(self, url):
+        """
+        """
         if url.endswith('/'):
            url=url[:-1]
         if not(url.startswith('http://') or url.startswith('https://')):
             url='https://'+url
 
         return url
+
+    def __get_evidence(self, match, text='', max_len=50):
+        """
+        Uses the given match to find its locations within the string and creates evidence of where 
+        it was found. This evidence is the match with available characters in front and behind 
+        the match. Take for example the string "<img src=http//example.com/img.png><div", where 
+        the match would be "http//example.com/img.png" and the evidence (depending on max_len)
+        could be " src=http://example.com/img.png><div", taking 5 chars in front and back to show
+        where the match was found.
+        
+        Parameters
+        ----------
+        match: re.Match || str
+            The match object or match string
+        text: str
+        max_len: int, default=50
+            The maximum number of extra characters to be added, in total. This can result of up to 
+            25 chars at the start of the match and 25 chars at the end.
+
+        Returns
+        -------
+        .str:
+            The evidence of the match, including "..." at the start and back
+        """
+        if type(match)==re.Match:
+            key=1
+            for k,v in match.groupdict().items():
+                key=k
+            #span = match.start(key), match.end(key)
+
+            start=match.start(key)
+            end=match.end(key)
+            
+            start_i = max(0, int(start-(max_len/2)))
+            end_i = min(len(match.string)-1, int(end+(max_len/2)))
+
+            return ' ... '+match.string[start_i:end_i]+' ... '
+        else:#if type(match)==str:
+            assert len(text)>0
+
+            start=text.find(match)
+            end=start+len(match)
+            #span = start, end
+
+            start_i = max(0, int(start-(max_len/2)))
+            end_i = min(len(text)-1, int(end+(max_len/2)))
+
+            return ' ... '+text[start_i:end_i]+' ... '
     
-    def __rm_dupl(self, l):
+    def __rm_dupl(self, l: list):
+        """
+        Remove duplicates from a list
+
+        Parameters
+        ----------
+        l: list
+            List to remove duplicates from
+        
+        Returns
+        -------
+        .list:
+            List without duplicates
+        """
         return list(dict.fromkeys(l))
 
     def __parse_kwargs(self, *args, depth=1, exclude=None, **kwargs):
@@ -538,6 +666,7 @@ class Crawler():
         self.emails = {}
         self.ips = {}
         self.versions = {}
+        self.strings = {}
         self.depth=depth
         self.exclude=exclude
         if 'timeout' in kwargs:

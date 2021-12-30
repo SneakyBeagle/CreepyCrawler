@@ -44,8 +44,12 @@ version_patterns = [
     '([vV]\s*[\d]+\.[\d][\.\d]{0,2})' # Version in format like 'v3.3.7'
 ]
 
-name_patterns = [
-    '^[a-zA-ZàáâäãåąčćęèéêëėįìíîïłńòóôöõøùúûüųūÿýżźñçčšžÀÁÂÄÃÅĄĆČĖĘÈÉÊËÌÍÎÏĮŁŃÒÓÔÖÕØÙÚÛÜŲŪŸÝŻŹÑßÇŒÆČŠŽ∂ð\ \,\.\'\-]+$'
+string_patterns = [
+    '[a-zA-ZàáâäãåąčćęèéêëėįìíîïłńòóôöõøùúûüųūÿýżźñçčšžÀÁÂÄÃÅĄĆČĖĘÈÉÊËÌÍÎÏĮŁŃÒÓÔÖÕØÙÚÛÜŲŪŸÝŻŹÑßÇŒÆČŠŽ∂ð\ \,\.\'\-]+'
+]
+
+cred_patterns = [
+    'AKIA[A-Z0-9]{20}' # AWS access key id
 ]
 
 if __name__=='__main__':
@@ -85,7 +89,9 @@ if __name__=='__main__':
         '2001:db8:3:4::192.0.2.33',
         '64:ff9b::192.0.2.33',
         'test',
-        '192.168.1.1'
+        '192.168.1.1',
+        'a name is',
+        'harry potter'
     ]
 
     def test_individual(tests):
@@ -108,5 +114,13 @@ if __name__=='__main__':
             print(t, 'is not a IPv6 address')
         #assert not _tests
 
+    def test_strings(tests):
+        for t in tests:
+            try:
+                print(t, '->', re.search(string_patterns[0], t).group())
+            except AttributeError:
+                print(t, 'is not a string')
+
     test_individual(test)
     test_multiline(test)
+    test_strings(test)

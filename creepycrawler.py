@@ -184,6 +184,8 @@ def parse_args():
     crawl_parser.add_argument('--no-colours', help='No colours',
                               action='store_true')
     crawl_parser.add_argument('--exclude', help='Exclude URLs that include this string')
+    crawl_parser.add_argument('--strings', help='Print discovered strings (Outputs a lot)',
+                              action='store_true')
     crawl_parser.add_argument('--user-agent', help='Specify user agent')
     crawl_parser.set_defaults(func=crawl)
 
@@ -225,6 +227,8 @@ def parse_args():
     single_parser.add_argument('-k', '--insecure', help='Allow insecure connections when using SSL',
                               action='store_true')
     single_parser.add_argument('--evidence', help='Print evidence',
+                              action='store_true')
+    single_parser.add_argument('--strings', help='Print discovered strings (Outputs a lot)',
                               action='store_true')
     single_parser.add_argument('-o', '--output-file', help='File to write the output into')
     single_parser.add_argument('-db', '--database', help='Database to write the output into')
@@ -295,17 +299,7 @@ def print_results(crawler, args):
             print(clr.FAINT_WHITE+url+clr.RESET, clr.GREY+'-->', '['+str(it['status'])+']'+clr.RESET)
         if args.evidence:
             print('\t', clr.GREY+'Evidence:', it['evidence']+clr.RESET)
-            print('\t', clr.GREY+'Regex:', it['regex']+clr.RESET)
-            
-    print('\nPOSSIBLE EMAILS:\n=====================================')
-    if args.evidence:
-        mails = crawler.get_emails()
-        for baseurl, addrs in mails.items():
-            if addrs:
-                print('\n'.join([addr for addr in addrs]))
-    else:
-        mails = crawler.get_emails(as_dict=False)
-        print('\n'.join([m for m in mails]))
+            #print('\t', clr.GREY+'Regex:', it['regex']+clr.RESET)
             
     print('\nSUBDOMAINS:\n=====================================')
     urls = crawler.get_subdomains()
@@ -316,7 +310,7 @@ def print_results(crawler, args):
             print(clr.FAINT_WHITE+url+clr.RESET, clr.GREY+'-->', '['+str(it['status'])+']'+clr.RESET)
         if args.evidence:
             print('\t', clr.GREY+'Evidence:', it['evidence']+clr.RESET)
-            print('\t', clr.GREY+'Regex:', it['regex']+clr.RESET)
+            #print('\t', clr.GREY+'Regex:', it['regex']+clr.RESET)
 
     print('\nEXTERNAL LINKS:\n=====================================')
     urls = crawler.get_ext_urls()
@@ -327,35 +321,72 @@ def print_results(crawler, args):
             print(clr.FAINT_WHITE+url+clr.RESET, clr.GREY+'-->', '['+str(it['status'])+']'+clr.RESET)
         if args.evidence:
             print('\t', clr.GREY+'Evidence:', it['evidence']+clr.RESET)
-            print('\t', clr.GREY+'Regex:', it['regex']+clr.RESET)
+            #print('\t', clr.GREY+'Regex:', it['regex']+clr.RESET)
 
-    print('\nIP ADDRESSES AND VERSION NUMBERS:\n====================')
+    """
+    print('\nPOSSIBLE EMAILS:\n=====================================')
     if args.evidence:
-        urls = crawler.get_ip_v()
-        for baseurl, ip_v in urls.items():
-            if ip_v:
-                #print(baseurl)
-                print('\n'.join([item for item in ip_v['ip_v']]))
-                print('\t', clr.GREY+baseurl+clr.RESET)
-                print('\t', clr.GREY+ip_v['evidence']+clr.RESET)
-                print('\t', clr.GREY+ip_v['regex']+clr.RESET)
+        mails = crawler.get_emails()
+        for baseurl, addrs in mails.items():
+            if addrs:
+                print('\n'.join([addr for addr in addrs]))
+    else:
+        mails = crawler.get_emails(as_dict=False)
+        print('\n'.join([m for m in mails]))
+    """
+            
+    print('\nPOSSIBLE EMAILS:\n=====================================')
+    if args.evidence:
+        urls = crawler.get_emails()
+        for baseurl, emails in urls.items():
+            if emails:
+                for i, email in enumerate(emails['emails']):
+                    print(email)
+                    print('\t', clr.GREY+'Evidence:', emails['evidence'][i]+clr.RESET)
+                    #print('\t', clr.GREY+'Regex:', emails['regex'][i]+clr.RESET)
+    else:
+        emails = crawler.get_emails(as_dict=False)
+        print('\n'.join([i for i in emails]))
+
+    print('\nIP ADDRESSES:\n====================')
+    if args.evidence:
+        urls = crawler.get_ips()
+        for baseurl, ips in urls.items():
+            if ips:
+                for i, ip in enumerate(ips['ips']):
+                    print(ip)
+                    print('\t', clr.GREY+'Evidence:', ips['evidence'][i]+clr.RESET)
+                    #print('\t', clr.GREY+'Regex:', ips['regex'][i]+clr.RESET)
     else:
         ips = crawler.get_ips(as_dict=False)
-        print('\n'.join([i for i in ips]))    
+        print('\n'.join([i for i in ips]))
 
     print('\nVERSION NUMBERS:\n====================')
     if args.evidence:
         urls = crawler.get_versions()
-        for baseurl, version in urls.items():
-            if version:
-                #print(baseurl)
-                print('\n'.join([item for item in version['versions']]))
-                print('\t', clr.GREY+baseurl+clr.RESET)
-                print('\t', clr.GREY+version_v['evidence']+clr.RESET)
-                print('\t', clr.GREY+version_v['regex']+clr.RESET)
+        for baseurl, versions in urls.items():
+            if versions:
+                for i, version in enumerate(versions['versions']):
+                    print(version)
+                    print('\t', clr.GREY+'Evidence:', versions['evidence'][i]+clr.RESET)
+                    #print('\t', clr.GREY+'Regex:', versions['regex'][i]+clr.RESET)
     else:
         versions = crawler.get_versions(as_dict=False)
         print('\n'.join([i for i in versions]))
+
+    if args.strings:
+        print('\nSTRINGS:\n====================')
+        if args.evidence:
+            urls = crawler.get_strings()
+            for baseurl, strings in urls.items():
+                if strings:
+                    for i, string in enumerate(strings['strings']):
+                        print(string)
+                        print('\t', clr.GREY+'Evidence:', strings['evidence'][i]+clr.RESET)
+                        #print('\t', clr.GREY+'Regex:', strings['regex'][i]+clr.RESET)
+        else:
+            strings = crawler.get_strings(as_dict=False)
+            print('\n'.join([i for i in strings]))
             
 def main():
     """
