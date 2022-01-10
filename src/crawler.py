@@ -9,31 +9,25 @@ from urllib3.exceptions import InsecureRequestWarning
 from threading import Thread
 
 class Crawler():
+    """
+    Class to handle crawling and analysis of webpages
+    """
     __urls: dict # Found urls with status codes, length, evidence and regex that found it
     visited_urls: dict # Urls that have been visited already
     crawling_urls: list # Urls that are currently being crawled
     next_urls: list # Next urls in line to visit
     emails: list # Found email adresses
-    ips: dict
-    versions: dict
-    strings: dict
+    ips: dict # Found IP addresses
+    versions: dict # Found version numbers
+    strings: dict # Found strings
     host: str # Host as derived from the provided base url
     protocol: str # Protocol as derived from the provided base url
 
-    # Link patterns
-    links_patt = link_patterns[:]
-
-    # email patterns
-    emails_patt = mail_patterns[:]
-
-    # IP addresses and version numbers
-    ips_patt = ip_patterns[:]
-
-    # Version patterns
-    vers_patt = version_patterns[:]
-
-    # String patterns
-    strings_patt = string_patterns[:]
+    links_patt = link_patterns[:] # Link patterns
+    emails_patt = mail_patterns[:] # email patterns
+    ips_patt = ip_patterns[:] # IP addresses and version numbers
+    vers_patt = version_patterns[:] # Version patterns
+    strings_patt = string_patterns[:] # String patterns
 
     def __init__(self, *args, baseurl, depth=1, exclude=None, **kwargs):
         """
@@ -42,6 +36,8 @@ class Crawler():
 
         Parameters
         ----------
+        *args: tuple
+            Optional unnamed arguments
         baseurl: str
             The url to start crawling from (currently only supports the root web dir).
         dept: int (default = 1)
@@ -51,6 +47,8 @@ class Crawler():
         exclude: str (default = None)
             If this parameter is provided, the crawler will compare this string to the
             found URLs. If there is a match, that URL will be excluded from further requests.
+        **kwargs: dict
+            Optional named arguments
         """
         self.__parse_kwargs(*args, depth, exclude, **kwargs)
         
@@ -119,16 +117,22 @@ class Crawler():
         """
         return self.protocol
 
-    def run_single(self, url, verify=True, timeout=2, user_agent=None):
+    def run_single(self, url, verify=True, timeout=2, user_agent=None, printwarning=True):
         """
-        Run the crawler on a single url to analyse it for sensitive information
+        Run the crawler on a single url to analyse it for interesting information
 
         Parameters
         ----------
         url: str
+            The url to analyse
         verify: bool
+            Verify the certificate
         timeout: int
+            Maximum time out
         user_agent: str
+            Custom user agent
+        printwarning: bool (default=True)
+            Prints warning messages if set to true
         """
         # Set some members
         self.verify=verify
@@ -138,7 +142,7 @@ class Crawler():
         
         # Request
         print('Getting url', url)
-        resp = self.get(url=url, verify=verify, printwarning=False, timeout=self.timeout,
+        resp = self.get(url=url, verify=verify, printwarning=printwarning, timeout=self.timeout,
                         user_agent=user_agent)
         if not(resp):
             print('[ERROR], cannot GET baseurl', url, '...')
@@ -146,27 +150,42 @@ class Crawler():
             sys.exit(1)
         self.__retrieve(resp=resp, baseurl=url)
         
-    def run(self, url, verify=True, nr_threads=4, timeout=2, user_agent=None):
+    def run(self, url, verify=True, nr_threads=4, timeout=2, user_agent=None,
+            depth=None, printwarning=False):
         """
-        Run creepycrawler on specified url.
+        Run crawler on specified url.
 
         Parameters
         ----------
         url: str
-        verify: bool
-        nr_threads: int
-        timeout: int
-        user_agent: str
+            The url to analyse
+        verify: bool (default=True)
+            Verify the certificate
+        nr_threads: int (default=4)
+            The maximum number of threads to use. This will self-adjust to a max of 100
+            or the number of links to get, depending on which is lower. For example, if 53
+            links are to be visited and nr_threads=100, 53 threads will be launched. If the 
+            next depth results in 105 links to follow, 100 threads will be launched.
+        timeout: int (default=2)
+            Maximum time out
+        user_agent: str (default=None)
+            Custom user agent
+        depth: int (default=None)
+            Sets self.depth if not None
+        printwarning: bool (default=False)
+            Prints warning messages if set to true
         """
         # Set some members
         self.verify=verify
         self.timeout=timeout
+        if depth:
+            self.depth=depth
 
         url=self.prepare_url(url=url)
         
         # Initial request
         print('Getting baseurl', url)
-        resp = self.get(url=url, verify=verify, printwarning=False, timeout=self.timeout,
+        resp = self.get(url=url, verify=verify, printwarning=printwarning, timeout=self.timeout,
                         user_agent=user_agent)
         if not(resp):
             print('[ERROR], cannot GET baseurl', url, '...')
@@ -243,7 +262,7 @@ class Crawler():
 
                 
 
-    def get(self, url, verify=True, printwarning=True, timeout=2, user_agent=None):
+    def get(self, url, verify=True, printwarning=False, timeout=2, user_agent=None):
         '''
         Try GET request to URL and save the response in visited_urls.
         '''

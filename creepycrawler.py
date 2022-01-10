@@ -322,18 +322,6 @@ def print_results(crawler, args):
         if args.evidence:
             print('\t', clr.GREY+'Evidence:', it['evidence']+clr.RESET)
             #print('\t', clr.GREY+'Regex:', it['regex']+clr.RESET)
-
-    """
-    print('\nPOSSIBLE EMAILS:\n=====================================')
-    if args.evidence:
-        mails = crawler.get_emails()
-        for baseurl, addrs in mails.items():
-            if addrs:
-                print('\n'.join([addr for addr in addrs]))
-    else:
-        mails = crawler.get_emails(as_dict=False)
-        print('\n'.join([m for m in mails]))
-    """
             
     print('\nPOSSIBLE EMAILS:\n=====================================')
     if args.evidence:
